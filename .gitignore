@@ -27,10 +27,7 @@ next-env.d.ts
 spinii-firebase-adminsdk-*.json
 
 # -------------------------------
-# Environment Variables
-.env
-.env.local
-.env.*.local
+
 
 # -------------------------------
 # Editor/OS Specific
