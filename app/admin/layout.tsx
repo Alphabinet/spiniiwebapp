@@ -1,97 +1,71 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { db } from '@/lib/firebaseConfig';
-import { collection, getDocs } from 'firebase/firestore';
 
-export default function AdminLayout({
-  children,
-}: {
+interface AdminLayoutProps {
   children: React.ReactNode;
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [stats, setStats] = useState({
-    pendingBookings: 0,
-    pendingApplications: 0,
-    pendingCampaigns: 0,
-  });
+}
+
+const AdminLayout = ({ children }: AdminLayoutProps) => {
   const pathname = usePathname();
 
-  // Fetch stats for notification badges
-  useEffect(() => {
-    const fetchStats = async () => {
-      if (!db) return;
-      
-      const bookingsSnapshot = await getDocs(collection(db, "bookings"));
-      const pendingBookings = bookingsSnapshot.docs.filter(doc => doc.data().status === 'pending').length;
-
-      const appsSnapshot = await getDocs(collection(db, "creatorApplications"));
-      const pendingApplications = appsSnapshot.docs.filter(doc => doc.data().status === 'pending').length;
-      
-      const campaignsSnapshot = await getDocs(collection(db, "campaigns"));
-      const pendingCampaigns = campaignsSnapshot.docs.filter(doc => doc.data().status === 'pending').length;
-
-      setStats({ pendingBookings, pendingApplications, pendingCampaigns });
-    };
-    fetchStats();
-  }, []);
-
-  const getLinkClass = (path: string) => {
-    return pathname === path
-      ? 'bg-white border-t border-l border-r border-gray-200 text-indigo-600'
-      : 'text-gray-500 hover:text-gray-700';
-  };
+  const navItems = [
+    { name: 'Dashboard', href: '/admin' },
+    { name: 'Bookings', href: '/admin/bookings' },
+    { name: 'Applications', href: '/admin/applications' },
+    { name: 'Campaigns', href: '/admin/campaigns' },
+    { name: 'Clients', href: '/admin/clients' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans antialiased">
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 sm:mb-0">Admin Dashboard</h1>
+    <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
 
-          <div className="relative w-full sm:w-64">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full rounded-lg border border-gray-200 py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-             <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+      {/* Tab Navigation - Always Visible */}
+      {/* The 'top-16' class was replaced with 'top-0' to remove the empty space */}
+      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-4">
+          {/* Horizontal Scroll Container */}
+          <div className="flex overflow-x-auto py-2 space-x-1 hide-scrollbar">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 whitespace-nowrap
+                    ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                >
+                  {item.name}
+                </Link>
+              );
+            })}
           </div>
         </div>
-      </header>
+      </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
-        <div className="flex flex-wrap border-b border-gray-200">
-          <Link href="/admin" className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base rounded-t-lg transition-all duration-200 ease-in-out ${getLinkClass('/admin')}`}>
-            Dashboard
-          </Link>
-          <Link href="/admin/bookings" className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base rounded-t-lg transition-all duration-200 ease-in-out flex items-center ${getLinkClass('/admin/bookings')}`}>
-            Bookings
-            {stats.pendingBookings > 0 && <span className="ml-2 bg-yellow-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{stats.pendingBookings}</span>}
-          </Link>
-          <Link href="/admin/applications" className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base rounded-t-lg transition-all duration-200 ease-in-out flex items-center ${getLinkClass('/admin/applications')}`}>
-            Applications
-            {stats.pendingApplications > 0 && <span className="ml-2 bg-yellow-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{stats.pendingApplications}</span>}
-          </Link>
-          <Link href="/admin/clients" className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base rounded-t-lg transition-all duration-200 ease-in-out ${getLinkClass('/admin/clients')}`}>
-            Clients
-          </Link>
-          <Link href="/admin/campaigns" className={`py-3 px-4 sm:px-6 font-medium text-sm sm:text-base rounded-t-lg transition-all duration-200 ease-in-out flex items-center ${getLinkClass('/admin/campaigns')}`}>
-            Campaigns
-            {stats.pendingCampaigns > 0 && <span className="ml-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{stats.pendingCampaigns}</span>}
-          </Link>
-        </div>
-      </div>
-      
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Pass search term to children or use context/URL params */}
-        {React.cloneElement(children as React.ReactElement, { searchTerm })}
+      {/* Main Content Area */}
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        {children}
       </main>
+
+      {/* Custom Scrollbar Style */}
+      <style jsx global>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none; /* Chrome, Safari, Opera */
+        }
+        .hide-scrollbar {
+          -ms-overflow-style: none; /* IE and Edge */
+          scrollbar-width: none; /* Firefox */
+        }
+      `}</style>
     </div>
   );
-}
+};
+
+export default AdminLayout;

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Mail, Lock, Eye, EyeOff, User, Building, Loader2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
   signInWithPopup,
   onAuthStateChanged,
   User as FirebaseAuthUser,
+  AuthError,
 } from 'firebase/auth';
 
 // Firebase imports for Firestore
@@ -129,15 +130,18 @@ export default function SignInSignUpPage() {
       // Store/update user details in Firestore after successful sign-in
       await storeUserInFirestore(userCredential.user);
       router.push("/dashboard"); // Redirect to dashboard on successful login
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Sign-in failed:", error);
       let errorMessage = "Sign-in failed. Please check your credentials.";
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = "Invalid email or password.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "Please enter a valid email address.";
-      } else if (error.code === 'auth/too-many-requests') {
-        errorMessage = "Too many failed login attempts. Please try again later.";
+      if (error instanceof Error && 'code' in error) {
+        const authError = error as AuthError;
+        if (authError.code === 'auth/user-not-found' || authError.code === 'auth/wrong-password') {
+          errorMessage = "Invalid email or password.";
+        } else if (authError.code === 'auth/invalid-email') {
+          errorMessage = "Please enter a valid email address.";
+        } else if (authError.code === 'auth/too-many-requests') {
+          errorMessage = "Too many failed login attempts. Please try again later.";
+        }
       }
       setAuthError(errorMessage);
     } finally {
@@ -169,15 +173,18 @@ export default function SignInSignUpPage() {
       // Store/update user details in Firestore after successful sign-up
       await storeUserInFirestore(userCredential.user, formData.name);
       router.push("/dashboard"); // Redirect to dashboard on successful signup
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Sign-up failed:", error);
       let errorMessage = "Sign-up failed. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = "This email is already in use.";
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = "Please enter a valid email address.";
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = "Password is too weak. It must be at least 6 characters.";
+      if (error instanceof Error && 'code' in error) {
+        const authError = error as AuthError;
+        if (authError.code === 'auth/email-already-in-use') {
+          errorMessage = "This email is already in use.";
+        } else if (authError.code === 'auth/invalid-email') {
+          errorMessage = "Please enter a valid email address.";
+        } else if (authError.code === 'auth/weak-password') {
+          errorMessage = "Password is too weak. It must be at least 6 characters.";
+        }
       }
       setAuthError(errorMessage);
     } finally {
@@ -201,15 +208,18 @@ export default function SignInSignUpPage() {
       // Google Auth often provides displayName directly, so we use that as fallback
       await storeUserInFirestore(userCredential.user, userCredential.user.displayName);
       router.push("/dashboard"); // Redirect to dashboard on successful Google login
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Google authentication failed:", error);
       let errorMessage = "Google sign-in failed. Please try again.";
-      if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = "Google sign-in was cancelled.";
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        errorMessage = "Another sign-in pop-up is already open.";
-      } else if (error.code === 'auth/account-exists-with-different-credential') {
-        errorMessage = "An account with this email already exists using different credentials.";
+      if (error instanceof Error && 'code' in error) {
+        const authError = error as AuthError;
+        if (authError.code === 'auth/popup-closed-by-user') {
+          errorMessage = "Google sign-in was cancelled.";
+        } else if (authError.code === 'auth/cancelled-popup-request') {
+          errorMessage = "Another sign-in pop-up is already open.";
+        } else if (authError.code === 'auth/account-exists-with-different-credential') {
+          errorMessage = "An account with this email already exists using different credentials.";
+        }
       }
       setAuthError(errorMessage);
     } finally {

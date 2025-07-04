@@ -27,9 +27,6 @@ next-env.d.ts
 spinii-firebase-adminsdk-*.json
 
 # -------------------------------
-
-
-# -------------------------------
 # Editor/OS Specific
 .vscode/
 .idea/

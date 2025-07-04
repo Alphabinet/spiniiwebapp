@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
-import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ShoppingCart, AlertCircle, Instagram, DollarSign, Briefcase, Globe } from "lucide-react";
+import Image from "next/image"; // Import the Next.js Image component
 
 // Type definition for Creator data
 interface Creator {
@@ -44,7 +44,7 @@ const formatNumber = (num: string | number): string => {
 export default function CreatorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Removed unused variable
 
   const [creator, setCreator] = useState<Creator | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,7 +205,7 @@ export default function CreatorDetailPage() {
           <AlertCircle className="h-20 w-20 text-gray-500 mx-auto mb-6" />
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Creator Not Found</h2>
           <p className="text-gray-600 mb-8 text-lg">
-            The profile you're looking for does not exist or may have been removed.
+            The profile you&apos;re looking for does not exist or may have been removed.
           </p>
           <Button
             className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 rounded-xl transition-all duration-300 transform hover:scale-105 shadow-md"
@@ -225,11 +225,13 @@ export default function CreatorDetailPage() {
 
           <section className="bg-gradient-to-br from-purple-200 to-indigo-200 text-white p-8 pt-12 pb-10 relative z-10 rounded-t-3xl">
             <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start mb-6 text-center sm:text-left">
-              <img
+              <Image
                 src={creator.profilePictureUrl}
                 alt={`${creator.fullName}'s profile`}
+                width={80}
+                height={80}
                 className="w-20 h-20 rounded-full border-4 border-white shadow-lg mb-4 sm:mb-0 sm:mr-4 object-cover transform transition-transform duration-300 hover:scale-105 hover:rotate-3"
-                onError={(e) => { e.currentTarget.src = 'https://placehold.co/200x200/CFD8DC/455A64?text=Profile'; }}
+                onError={(e) => { const target = e.target as HTMLImageElement; target.src = 'https://placehold.co/200x200/CFD8DC/455A64?text=Profile'; }}
               />
               <div className="flex-grow">
                 <h1 className="text-3xl sm:text-4xl font-extrabold mb-0 drop-shadow-sm text-gray-800 leading-tight">
@@ -351,8 +353,6 @@ export default function CreatorDetailPage() {
             </div>
           </div>
         </div>
-
-        {/* --- REMOVED: The BookingModal component is no longer included here --- */}
       </div>
     </div>
   );

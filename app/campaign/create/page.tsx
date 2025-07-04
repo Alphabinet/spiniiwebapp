@@ -9,7 +9,7 @@ import {
     ArrowLeft,
     Lock,
     Users,
-    DollarSign,
+    // DollarSign, // Removed unused import
     Calendar,
     BarChart2,
     FileText,
@@ -44,7 +44,6 @@ import { toast } from 'sonner';
 
 // --- Constants for Pricing ---
 const BUDGET_INCREMENTS = [100, 200, 500, 1000, 2000];
-// --- CHANGE: New service fee structure based on creator count ---
 const SERVICE_FEE_TIERS = [
     { creators: 5, fee: 1599 },
     { creators: 10, fee: 4999 },
@@ -97,6 +96,17 @@ interface RateCardEntry {
     comboPrice: number;
 }
 
+// --- Type Definitions for Razorpay ---
+interface RazorpaySuccessResponse {
+    razorpay_payment_id: string;
+}
+
+interface RazorpayErrorResponse {
+    error: {
+        description: string;
+    };
+}
+
 // --- Data ---
 const INSTAGRAM_RATE_CARD: RateCardEntry[] = [
     { tier: 1000, label: '1K', reelPrice: 500, storyPrice: 300, comboPrice: 700 },
@@ -130,7 +140,7 @@ const steps = [
 const CampaignCreationPage = () => {
     const [currentStep, setCurrentStep] = useState(0);
     const [formData, setFormData] = useState<CampaignFormData>({
-        campaignName: '', platform: '', 
+        campaignName: '', platform: '',
         services: { reel: 0, story: 0, reelAndStory: 0 },
         numberOfCreators: 1,
         totalCreatorBudget: '', minimumFollowers: '', averageViews: '',
@@ -151,7 +161,7 @@ const CampaignCreationPage = () => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
-            if(currentUser) {
+            if (currentUser) {
                 setFormData(prev => ({
                     ...prev,
                     ownerFullName: prev.ownerFullName || currentUser.displayName || '',
@@ -167,7 +177,7 @@ const CampaignCreationPage = () => {
         if (!followers || followers <= 0) return 0;
         let selectedTier = INSTAGRAM_RATE_CARD.slice().reverse().find(entry => followers >= entry.tier);
         if (!selectedTier) selectedTier = INSTAGRAM_RATE_CARD[0];
-        
+
         const priceMap = {
             reel: selectedTier.reelPrice,
             story: selectedTier.storyPrice,
@@ -175,7 +185,7 @@ const CampaignCreationPage = () => {
         };
         return priceMap[serviceType] || 0;
     };
-    
+
     const estimatedMinimumBudget = useMemo(() => {
         const followers = Number(formData.minimumFollowers);
         if (!followers) return 0;
@@ -183,7 +193,7 @@ const CampaignCreationPage = () => {
         const reelCost = formData.services.reel * getMinimumBudgetForService(followers, 'reel');
         const storyCost = formData.services.story * getMinimumBudgetForService(followers, 'story');
         const comboCost = formData.services.reelAndStory * getMinimumBudgetForService(followers, 'reelAndStory');
-        
+
         return (reelCost + storyCost + comboCost) * formData.numberOfCreators;
     }, [formData.minimumFollowers, formData.services, formData.numberOfCreators]);
 
@@ -201,7 +211,7 @@ const CampaignCreationPage = () => {
     };
 
     const handleSelectChange = (name: keyof Omit<CampaignFormData, 'services'>, value: string) => {
-        setFormData({ ...formData, [name]: value as any });
+        setFormData({ ...formData, [name]: value });
     };
 
     const handleCategoryChange = (category: string) => {
@@ -212,7 +222,7 @@ const CampaignCreationPage = () => {
                 : [...prev.categories, category],
         }));
     };
-    
+
     const handleCountChange = (field: 'reel' | 'story' | 'reelAndStory' | 'numberOfCreators', change: 1 | -1) => {
         setFormData(prev => {
             if (field === 'numberOfCreators') {
@@ -236,11 +246,11 @@ const CampaignCreationPage = () => {
         for (const field of currentFields) {
             const value = formData[field as keyof CampaignFormData];
             if (Array.isArray(value) ? value.length === 0 : !value && value !== 0) {
-                 toast.error(`Please fill in all required fields for ${steps[currentStep].name}.`);
-                 return false;
+                toast.error(`Please fill in all required fields for ${steps[currentStep].name}.`);
+                return false;
             }
         }
-        
+
         switch (currentStep) {
             case 1:
                 const totalServices = Object.values(formData.services).reduce((sum, count) => sum + count, 0);
@@ -266,7 +276,7 @@ const CampaignCreationPage = () => {
                 }
                 break;
             case 4:
-                const phoneRegex = /^\+?\d{10,15}$/; 
+                const phoneRegex = /^\+?\d{10,15}$/;
                 if (!phoneRegex.test(formData.contactNumber)) {
                     toast.error('Please enter a valid Contact Number (10-15 digits).');
                     return false;
@@ -284,16 +294,13 @@ const CampaignCreationPage = () => {
     const nextStep = () => { if (validateStep()) setCurrentStep(currentStep + 1); };
     const prevStep = () => setCurrentStep(currentStep - 1);
 
-    // --- CHANGE: New cost calculation logic ---
     const getServiceFee = (creators: number): number => {
         if (creators <= 0) return 0;
-        // Find the highest tier that is less than or equal to the number of creators
         const applicableTier = SERVICE_FEE_TIERS
             .slice()
             .reverse()
             .find(tier => creators >= tier.creators);
-        
-        // If no tier is met (e.g., creators < 5), use the lowest tier's fee.
+
         return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
     };
 
@@ -330,20 +337,19 @@ const CampaignCreationPage = () => {
                 currency: 'INR',
                 name: 'Snaapii Campaign',
                 description: `Payment for ${formData.campaignName}`,
-                handler: async (response: any) => {
+                handler: async (response: RazorpaySuccessResponse) => {
                     try {
                         const campaignData = {
                             ...formData,
-                            // --- CHANGE: Updated costs object ---
                             costs: { creatorsCost, serviceFee, totalAmount },
                             userInfo: { uid: user.uid, displayName: user.displayName, email: user.email },
                             razorpayPaymentId: response.razorpay_payment_id,
                             status: 'pending_review',
                             createdAt: new Date().toISOString(),
                         };
-                        
+
                         await addDoc(collection(db, "campaigns"), campaignData);
-                        
+
                         setPaymentStatus('success');
                         setCurrentStep(currentStep + 1);
                         toast.success('Payment successful and campaign created!');
@@ -357,15 +363,16 @@ const CampaignCreationPage = () => {
                 prefill: { name: formData.ownerFullName, email: formData.ownerEmailAddress, contact: formData.contactNumber },
                 theme: { color: '#2563EB' },
             };
-            // @ts-ignore
+            // @ts-expect-error Razorpay is loaded dynamically
             const rzp1 = new window.Razorpay(options);
-            rzp1.on('payment.failed', (response: any) => {
+            rzp1.on('payment.failed', (response: RazorpayErrorResponse) => {
                 toast.error(`Payment failed: ${response.error.description}`);
                 setPaymentStatus('failed');
                 setCurrentStep(currentStep + 1);
             });
             rzp1.open();
-        } catch (error) {
+        } catch (err) {
+            console.error('An error occurred during payment setup.', err);
             toast.error('An error occurred during payment setup.');
             setPaymentStatus('failed');
             setCurrentStep(currentStep + 1);
@@ -377,17 +384,17 @@ const CampaignCreationPage = () => {
     const renderStep = () => {
         switch (currentStep) {
             case 0:
-                 return (
+                return (
                     <>
                         <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 1: Campaign Details</h2>
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="campaignName" className="font-semibold text-gray-700">Campaign Name</Label>
-                                <Input id="campaignName" name="campaignName" value={formData.campaignName} onChange={handleInputChange} placeholder="e.g., Summer Collection Launch" className="mt-1"/>
+                                <Input id="campaignName" name="campaignName" value={formData.campaignName} onChange={handleInputChange} placeholder="e.g., Summer Collection Launch" className="mt-1" />
                             </div>
                             <div>
                                 <Label className="font-semibold text-gray-700">Platform</Label>
-                                <RadioGroup value={formData.platform} onValueChange={(v) => handleSelectChange('platform', v as any)} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+                                <RadioGroup value={formData.platform} onValueChange={(v) => handleSelectChange('platform', v)} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
                                     {(['Instagram', 'Youtube', 'Facebook'] as const).map(p => {
                                         const Icon = { Instagram, Youtube, Facebook }[p];
                                         return (
@@ -412,14 +419,14 @@ const CampaignCreationPage = () => {
                             <div className="space-y-6">
                                 <div>
                                     <Label htmlFor="minimumFollowers" className="font-semibold text-gray-700">Minimum Followers</Label>
-                                    <Input id="minimumFollowers" name="minimumFollowers" type="number" min="1000" value={formData.minimumFollowers} onChange={handleInputChange} placeholder="e.g., 10000" className="mt-1"/>
+                                    <Input id="minimumFollowers" name="minimumFollowers" type="number" min="1000" value={formData.minimumFollowers} onChange={handleInputChange} placeholder="e.g., 10000" className="mt-1" />
                                 </div>
                                 <div className="space-y-3">
                                     <Label className="font-semibold text-gray-700">Select Services</Label>
                                     <div className="p-4 border rounded-lg space-y-4 bg-gray-50">
                                         {(['reel', 'story', 'reelAndStory'] as const).map(serviceKey => (
                                             <div key={serviceKey} className="flex items-center justify-between">
-                                                <p className="font-medium text-gray-800">{ { reel: 'Reels', story: 'Story', reelAndStory: 'Reels + Story' }[serviceKey] }</p>
+                                                <p className="font-medium text-gray-800">{{ reel: 'Reels', story: 'Story', reelAndStory: 'Reels + Story' }[serviceKey]}</p>
                                                 <div className="flex items-center gap-3">
                                                     <Button size="icon" variant="outline" className="rounded-full h-8 w-8" onClick={() => handleCountChange(serviceKey, -1)}><Minus className="h-4 w-4" /></Button>
                                                     <span className="font-bold text-lg w-8 text-center">{formData.services[serviceKey]}</span>
@@ -446,7 +453,7 @@ const CampaignCreationPage = () => {
                                 </div>
                                 <div>
                                     <Label htmlFor="totalCreatorBudget" className="font-semibold text-gray-700">Total Creator Budget (₹)</Label>
-                                    <Input id="totalCreatorBudget" name="totalCreatorBudget" type="text" value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`} readOnly className="mt-1 text-lg font-bold bg-white"/>
+                                    <Input id="totalCreatorBudget" name="totalCreatorBudget" type="text" value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`} readOnly className="mt-1 text-lg font-bold bg-white" />
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {BUDGET_INCREMENTS.map(inc => (
                                             <Button key={inc} variant="outline" size="sm" onClick={() => handleBudgetIncrement(inc)}>
@@ -460,18 +467,18 @@ const CampaignCreationPage = () => {
                     </>
                 );
             case 2:
-                 return (
+                return (
                     <>
                         <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 3: Target Audience</h2>
                         <div className="space-y-4">
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <div className="flex-1">
                                     <Label htmlFor="minAge" className="font-semibold text-gray-700">Minimum Age</Label>
-                                    <Input id="minAge" name="minAge" type="number" min="13" value={formData.minAge} onChange={handleInputChange} placeholder="e.g., 18" className="mt-1"/>
+                                    <Input id="minAge" name="minAge" type="number" min="13" value={formData.minAge} onChange={handleInputChange} placeholder="e.g., 18" className="mt-1" />
                                 </div>
                                 <div className="flex-1">
                                     <Label htmlFor="maxAge" className="font-semibold text-gray-700">Maximum Age</Label>
-                                    <Input id="maxAge" name="maxAge" type="number" min="13" value={formData.maxAge} onChange={handleInputChange} placeholder="e.g., 35" className="mt-1"/>
+                                    <Input id="maxAge" name="maxAge" type="number" min="13" value={formData.maxAge} onChange={handleInputChange} placeholder="e.g., 35" className="mt-1" />
                                 </div>
                             </div>
                             <div>
@@ -487,7 +494,7 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="location" className="font-semibold text-gray-700">Location (City, State)</Label>
-                                <Input id="location" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g., Mumbai, Maharashtra" className="mt-1"/>
+                                <Input id="location" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g., Mumbai, Maharashtra" className="mt-1" />
                             </div>
                         </div>
                     </>
@@ -510,15 +517,15 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="campaignDescription" className="font-semibold text-gray-700">Campaign Description</Label>
-                                <Textarea id="campaignDescription" name="campaignDescription" value={formData.campaignDescription} onChange={handleInputChange} placeholder="Describe your campaign goals and requirements..." className="mt-1 min-h-[120px]"/>
+                                <Textarea id="campaignDescription" name="campaignDescription" value={formData.campaignDescription} onChange={handleInputChange} placeholder="Describe your campaign goals and requirements..." className="mt-1 min-h-[120px]" />
                             </div>
                             <div>
                                 <Label htmlFor="deadline" className="font-semibold text-gray-700">Deadline</Label>
-                                <Input id="deadline" name="deadline" type="date" value={formData.deadline} onChange={handleInputChange} className="mt-1"/>
+                                <Input id="deadline" name="deadline" type="date" value={formData.deadline} onChange={handleInputChange} className="mt-1" />
                             </div>
                             <div>
                                 <Label htmlFor="demoVideoUrl" className="font-semibold text-gray-700">Demo Video URL (Optional)</Label>
-                                <Input id="demoVideoUrl" name="demoVideoUrl" value={formData.demoVideoUrl} onChange={handleInputChange} placeholder="Link to a demo video (e.g., YouTube)" className="mt-1"/>
+                                <Input id="demoVideoUrl" name="demoVideoUrl" value={formData.demoVideoUrl} onChange={handleInputChange} placeholder="Link to a demo video (e.g., YouTube)" className="mt-1" />
                             </div>
                         </div>
                     </>
@@ -530,56 +537,56 @@ const CampaignCreationPage = () => {
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="ownerFullName" className="font-semibold text-gray-700">Official Full Name</Label>
-                                <Input id="ownerFullName" name="ownerFullName" value={formData.ownerFullName} onChange={handleInputChange} placeholder="Your full name" className="mt-1"/>
+                                <Input id="ownerFullName" name="ownerFullName" value={formData.ownerFullName} onChange={handleInputChange} placeholder="Your full name" className="mt-1" />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <Label htmlFor="contactNumber" className="font-semibold text-gray-700">Contact Number</Label>
-                                    <Input id="contactNumber" name="contactNumber" type="tel" value={formData.contactNumber} onChange={handleInputChange} placeholder="+91 9876543210" className="mt-1"/>
+                                    <Input id="contactNumber" name="contactNumber" type="tel" value={formData.contactNumber} onChange={handleInputChange} placeholder="+91 9876543210" className="mt-1" />
                                 </div>
                                 <div>
                                     <Label htmlFor="whatsappContactNumber" className="font-semibold text-gray-700">WhatsApp Number (Optional)</Label>
-                                    <Input id="whatsappContactNumber" name="whatsappContactNumber" type="tel" value={formData.whatsappContactNumber} onChange={handleInputChange} placeholder="If different from contact no." className="mt-1"/>
+                                    <Input id="whatsappContactNumber" name="whatsappContactNumber" type="tel" value={formData.whatsappContactNumber} onChange={handleInputChange} placeholder="If different from contact no." className="mt-1" />
                                 </div>
                             </div>
                             <div>
                                 <Label htmlFor="ownerEmailAddress" className="font-semibold text-gray-700">Email Address</Label>
-                                <Input id="ownerEmailAddress" name="ownerEmailAddress" type="email" value={formData.ownerEmailAddress} onChange={handleInputChange} placeholder="your.email@example.com" className="mt-1"/>
+                                <Input id="ownerEmailAddress" name="ownerEmailAddress" type="email" value={formData.ownerEmailAddress} onChange={handleInputChange} placeholder="your.email@example.com" className="mt-1" />
                             </div>
                             <div>
                                 <Label htmlFor="brandName" className="font-semibold text-gray-700">Brand Name (Optional)</Label>
-                                <Input id="brandName" name="brandName" value={formData.brandName} onChange={handleInputChange} placeholder="e.g., My Awesome Brand" className="mt-1"/>
+                                <Input id="brandName" name="brandName" value={formData.brandName} onChange={handleInputChange} placeholder="e.g., My Awesome Brand" className="mt-1" />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <Label htmlFor="ownerCity" className="font-semibold text-gray-700">City</Label>
-                                    <Input id="ownerCity" name="ownerCity" value={formData.ownerCity} onChange={handleInputChange} placeholder="e.g., Bangalore" className="mt-1"/>
+                                    <Input id="ownerCity" name="ownerCity" value={formData.ownerCity} onChange={handleInputChange} placeholder="e.g., Bangalore" className="mt-1" />
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerDistrict" className="font-semibold text-gray-700">District</Label>
-                                    <Input id="ownerDistrict" name="ownerDistrict" value={formData.ownerDistrict} onChange={handleInputChange} placeholder="e.g., Bangalore Urban" className="mt-1"/>
+                                    <Input id="ownerDistrict" name="ownerDistrict" value={formData.ownerDistrict} onChange={handleInputChange} placeholder="e.g., Bangalore Urban" className="mt-1" />
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerState" className="font-semibold text-gray-700">State</Label>
-                                    <Input id="ownerState" name="ownerState" value={formData.ownerState} onChange={handleInputChange} placeholder="e.g., Karnataka" className="mt-1"/>
+                                    <Input id="ownerState" name="ownerState" value={formData.ownerState} onChange={handleInputChange} placeholder="e.g., Karnataka" className="mt-1" />
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerCountry" className="font-semibold text-gray-700">Country</Label>
-                                    <Input id="ownerCountry" name="ownerCountry" value={formData.ownerCountry} onChange={handleInputChange} placeholder="e.g., India" className="mt-1"/>
+                                    <Input id="ownerCountry" name="ownerCountry" value={formData.ownerCountry} onChange={handleInputChange} placeholder="e.g., India" className="mt-1" />
                                 </div>
                             </div>
                         </div>
                     </>
                 );
             case 5:
-                 return (
+                return (
                     <>
                         <h2 className="text-2xl font-bold text-gray-800 mb-2 text-center">Final Step: Review & Pay</h2>
                         <p className="text-center text-gray-500 mb-8">Confirm your campaign details and proceed to payment.</p>
                         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                             <div className="lg:col-span-3 space-y-6">
                                 <div className="bg-white p-5 rounded-xl border">
-                                    <h3 className="font-bold text-lg mb-3 flex items-center"><FileText className="mr-2 h-5 w-5 text-blue-600"/>Campaign Summary</h3>
+                                    <h3 className="font-bold text-lg mb-3 flex items-center"><FileText className="mr-2 h-5 w-5 text-blue-600" />Campaign Summary</h3>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                                         <p className="text-gray-500">Name</p><p className="font-medium text-gray-800">{formData.campaignName}</p>
                                         <p className="text-gray-500">Platform</p><p className="font-medium text-gray-800">{formData.platform}</p>
@@ -588,7 +595,7 @@ const CampaignCreationPage = () => {
                                     </div>
                                 </div>
                                 <div className="bg-white p-5 rounded-xl border">
-                                    <h3 className="font-bold text-lg mb-3 flex items-center"><Users className="mr-2 h-5 w-5 text-blue-600"/>Services & Targeting</h3>
+                                    <h3 className="font-bold text-lg mb-3 flex items-center"><Users className="mr-2 h-5 w-5 text-blue-600" />Services & Targeting</h3>
                                     <div className="space-y-2 text-sm">
                                         {formData.services.reel > 0 && <p><span className="font-medium text-gray-800">{formData.services.reel} x</span> Instagram Reels</p>}
                                         {formData.services.story > 0 && <p><span className="font-medium text-gray-800">{formData.services.story} x</span> Instagram Stories</p>}
@@ -639,7 +646,7 @@ const CampaignCreationPage = () => {
                             <>
                                 <CheckCircle className="h-20 w-20 text-green-500 mx-auto animate-pulse" />
                                 <h3 className="text-3xl font-bold text-green-600 mt-4">Payment Successful!</h3>
-                                <p className="text-gray-600 mt-2">Your campaign is under review. We'll notify you upon approval.</p>
+                                <p className="text-gray-600 mt-2">Your campaign is under review. We&apos;ll notify you upon approval.</p>
                                 <Button onClick={() => window.location.reload()} className="mt-6">Create Another Campaign</Button>
                             </>
                         ) : (
@@ -657,7 +664,7 @@ const CampaignCreationPage = () => {
             default: return null;
         }
     };
-    
+
     if (!isClient || !isAuthReady) {
         return (
             <div className="flex items-center justify-center min-h-screen">
@@ -665,7 +672,7 @@ const CampaignCreationPage = () => {
             </div>
         );
     }
-    
+
     return (
         <div className="bg-gray-50 min-h-screen">
             <div className="container mx-auto p-4 sm:p-8 max-w-6xl">
@@ -673,7 +680,7 @@ const CampaignCreationPage = () => {
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-center text-gray-800 mb-2">
                         Launch Your Next Campaign
                     </h1>
-                     <p className="text-center text-gray-500 mb-10">Follow the steps below to get your campaign live.</p>
+                    <p className="text-center text-gray-500 mb-10">Follow the steps below to get your campaign&apos;s live.</p>
 
                     <div className="flex justify-between items-start mb-10 relative">
                         <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 transform -translate-y-1/2">
@@ -696,7 +703,7 @@ const CampaignCreationPage = () => {
                     </div>
 
                     {currentStep < steps.length - 2 && (
-                         <div className="flex justify-between mt-10 pt-6 border-t">
+                        <div className="flex justify-between mt-10 pt-6 border-t">
                             <Button onClick={prevStep} variant="outline" className="px-6 py-3 text-base" disabled={currentStep === 0}>
                                 <ArrowLeft className="mr-2 h-5 w-5" /> Back
                             </Button>
@@ -705,7 +712,7 @@ const CampaignCreationPage = () => {
                             </Button>
                         </div>
                     )}
-                     {currentStep === steps.length - 2 && ( // Only show on Summary step
+                    {currentStep === steps.length - 2 && ( // Only show on Summary step
                         <div className="flex justify-between mt-10 pt-6 border-t">
                             <Button onClick={prevStep} variant="outline" className="px-6 py-3 text-base">
                                 <ArrowLeft className="mr-2 h-5 w-5" /> Back to Edit

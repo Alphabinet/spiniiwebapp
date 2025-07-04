@@ -23,7 +23,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card"; // Removed unused CardContent
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
@@ -31,13 +31,12 @@ import { motion } from "framer-motion";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu"; // Removed unused DropdownMenuItem
 import {
   Select,
   SelectContent,
@@ -98,10 +97,10 @@ export default function CreatorListPage() {
   const [tempSelectedCategory, setTempSelectedCategory] = useState("All");
   const [tempSelectedLanguage, setTempSelectedLanguage] = useState("All");
   const [tempSelectedCityState, setTempSelectedCityState] = useState("All");
-  
+
   // Sort State
   const [sortBy, setSortBy] = useState<string>("followers_desc");
-  
+
   // UI State for filter visibility
   const [showFilters, setShowFilters] = useState(false);
 
@@ -206,7 +205,7 @@ export default function CreatorListPage() {
         (creator) => creator.contentCategory === appliedCategory
       );
     }
-    
+
     // 2. Filter by Language
     if (appliedLanguage !== "All") {
       currentCreators = currentCreators.filter(
@@ -282,125 +281,125 @@ export default function CreatorListPage() {
             )}
           </Button>
         </div>
-        
+
         {showFilters && (
-            <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 bg-white p-6 rounded-2xl shadow-lg border border-purple-200"
-            >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full md:w-auto">
-                    {/* Category Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="category-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                            <Tag className="w-4 h-4 text-purple-500" />
-                            Category
-                        </label>
-                        <Select value={tempSelectedCategory} onValueChange={setTempSelectedCategory}>
-                            <SelectTrigger id="category-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
-                                <SelectValue placeholder="Select Category" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
-                                {categories.map((category) => (
-                                    <SelectItem key={category} value={category}>{category}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 bg-white p-6 rounded-2xl shadow-lg border border-purple-200"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full md:w-auto">
+              {/* Category Filter */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="category-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <Tag className="w-4 h-4 text-purple-500" />
+                  Category
+                </label>
+                <Select value={tempSelectedCategory} onValueChange={setTempSelectedCategory}>
+                  <SelectTrigger id="category-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
+                    <SelectValue placeholder="Select Category" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                    {/* Language Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="language-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                            <Languages className="w-4 h-4 text-purple-500" />
-                            Language
-                        </label>
-                        <Select value={tempSelectedLanguage} onValueChange={setTempSelectedLanguage}>
-                            <SelectTrigger id="language-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
-                                <SelectValue placeholder="Select Language" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
-                                {languages.map((language) => (
-                                    <SelectItem key={language} value={language}>{language}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+              {/* Language Filter */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="language-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <Languages className="w-4 h-4 text-purple-500" />
+                  Language
+                </label>
+                <Select value={tempSelectedLanguage} onValueChange={setTempSelectedLanguage}>
+                  <SelectTrigger id="language-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
+                    <SelectValue placeholder="Select Language" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                    {languages.map((language) => (
+                      <SelectItem key={language} value={language}>{language}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                    {/* State/City Filter */}
-                    <div className="flex flex-col gap-2">
-                        <label htmlFor="city-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                            <MapPin className="w-4 h-4 text-purple-500" />
-                            Location
-                        </label>
-                        <Select value={tempSelectedCityState} onValueChange={setTempSelectedCityState}>
-                            <SelectTrigger id="city-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
-                                <SelectValue placeholder="Select City/State" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
-                                {citiesStates.map((city) => (
-                                    <SelectItem key={city} value={city}>{city}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
+              {/* State/City Filter */}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="city-select" className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <MapPin className="w-4 h-4 text-purple-500" />
+                  Location
+                </label>
+                <Select value={tempSelectedCityState} onValueChange={setTempSelectedCityState}>
+                  <SelectTrigger id="city-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all">
+                    <SelectValue placeholder="Select City/State" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                    {citiesStates.map((city) => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                {/* Sort Dropdown */}
-                <div className="relative z-10 w-full md:w-auto mt-6 md:mt-0">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" className="w-full md:w-auto rounded-full px-5 py-2 flex items-center gap-2 transition-all duration-200 border-2 border-gray-200 hover:border-purple-400">
-                                {sortBy.includes('desc') ? (
-                                    <ArrowDownWideNarrow className="h-4 w-4" />
-                                ) : (
-                                    <ArrowUpWideNarrow className="h-4 w-4" />
-                                )}
-                                {getSortByLabel()}
-                                <ChevronDown className="h-4 w-4 ml-1 opacity-70" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-64">
-                            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
-                                <DropdownMenuRadioItem value="followers_desc">
-                                    <Users className="mr-2 h-4 w-4" /> Followers (Highest)
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="reel_views_desc">
-                                    <Eye className="mr-2 h-4 w-4" /> Avg. Reel Views (Highest)
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="story_views_desc">
-                                    <Eye className="mr-2 h-4 w-4" /> Avg. Story Views (Highest)
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="price_desc">
-                                    <ArrowDownWideNarrow className="mr-2 h-4 w-4" /> Price (High to Low)
-                                </DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="price_asc">
-                                    <ArrowUpWideNarrow className="mr-2 h-4 w-4" /> Price (Low to High)
-                                </DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
+            {/* Sort Dropdown */}
+            <div className="relative z-10 w-full md:w-auto mt-6 md:mt-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full md:w-auto rounded-full px-5 py-2 flex items-center gap-2 transition-all duration-200 border-2 border-gray-200 hover:border-purple-400">
+                    {sortBy.includes('desc') ? (
+                      <ArrowDownWideNarrow className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpWideNarrow className="h-4 w-4" />
+                    )}
+                    {getSortByLabel()}
+                    <ChevronDown className="h-4 w-4 ml-1 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                    <DropdownMenuRadioItem value="followers_desc">
+                      <Users className="mr-2 h-4 w-4" /> Followers (Highest)
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="reel_views_desc">
+                      <Eye className="mr-2 h-4 w-4" /> Avg. Reel Views (Highest)
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="story_views_desc">
+                      <Eye className="mr-2 h-4 w-4" /> Avg. Story Views (Highest)
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="price_desc">
+                      <ArrowDownWideNarrow className="mr-2 h-4 w-4" /> Price (High to Low)
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="price_asc">
+                      <ArrowUpWideNarrow className="mr-2 h-4 w-4" /> Price (Low to High)
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-                {/* Apply and Reset Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto mt-6 md:mt-0">
-                    <Button
-                        onClick={handleApplyFilters}
-                        className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-3 transition-all duration-200 shadow-md"
-                    >
-                        Apply Filters
-                    </Button>
-                    <Button
-                        onClick={handleResetFilters}
-                        variant="outline"
-                        className="w-full md:w-auto rounded-full px-6 py-3 font-semibold border-2 border-gray-300 hover:border-red-400 hover:text-red-600 transition-all duration-200"
-                    >
-                        <XCircle className="h-4 w-4 mr-2" /> Reset
-                    </Button>
-                </div>
-            </motion.div>
+            {/* Apply and Reset Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto mt-6 md:mt-0">
+              <Button
+                onClick={handleApplyFilters}
+                className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-3 transition-all duration-200 shadow-md"
+              >
+                Apply Filters
+              </Button>
+              <Button
+                onClick={handleResetFilters}
+                variant="outline"
+                className="w-full md:w-auto rounded-full px-6 py-3 font-semibold border-2 border-gray-300 hover:border-red-400 hover:text-red-600 transition-all duration-200"
+              >
+                <XCircle className="h-4 w-4 mr-2" /> Reset
+              </Button>
+            </div>
+          </motion.div>
         )}
 
         {/* Conditional Rendering for Creators: Loading, Error, or Data */}
@@ -452,10 +451,10 @@ export default function CreatorListPage() {
                           <h3 className="text-2xl font-bold text-gray-900 line-clamp-1">{creator.fullName}</h3>
                           <p className="text-sm text-gray-500 font-medium line-clamp-1">@{creator.instagramUsername}</p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                               <Badge variant="secondary" className="text-xs px-3 py-1 bg-purple-100 text-purple-700 font-semibold">{creator.contentCategory}</Badge>
-                               <Badge variant="outline" className="text-xs px-3 py-1 text-gray-600 border-gray-300 font-semibold flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" /> {creator.cityState}
-                               </Badge>
+                            <Badge variant="secondary" className="text-xs px-3 py-1 bg-purple-100 text-purple-700 font-semibold">{creator.contentCategory}</Badge>
+                            <Badge variant="outline" className="text-xs px-3 py-1 text-gray-600 border-gray-300 font-semibold flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> {creator.cityState}
+                            </Badge>
                           </div>
                         </div>
                       </div>
@@ -472,20 +471,20 @@ export default function CreatorListPage() {
                           <p className="text-xs text-gray-600">Avg. Reel Views</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex flex-col gap-2 my-2 text-sm text-gray-700">
-                               <div className="flex items-center justify-between">
-                                   <span className="font-medium">Avg. Story Views:</span>
-                                   <span className="font-bold text-gray-900">{creator.storyAverageViews}</span>
-                               </div>
-                               <div className="flex items-center justify-between">
-                                   <span className="font-medium flex items-center gap-1"><Languages className="h-4 w-4" /> Languages:</span>
-                                   <span className="font-bold text-gray-900 line-clamp-1">{creator.contentLanguages}</span>
-                               </div>
-                               <div className="flex items-center justify-between">
-                                   <span className="font-medium flex items-center gap-1"><Gauge className="h-4 w-4" /> Delivery:</span>
-                                   <span className="font-bold text-gray-900">{creator.deliveryDuration}</span>
-                               </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Avg. Story Views:</span>
+                          <span className="font-bold text-gray-900">{creator.storyAverageViews}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium flex items-center gap-1"><Languages className="h-4 w-4" /> Languages:</span>
+                          <span className="font-bold text-gray-900 line-clamp-1">{creator.contentLanguages}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium flex items-center gap-1"><Gauge className="h-4 w-4" /> Delivery:</span>
+                          <span className="font-bold text-gray-900">{creator.deliveryDuration}</span>
+                        </div>
                       </div>
 
                       <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-xl mt-4 flex-grow flex flex-col justify-center">

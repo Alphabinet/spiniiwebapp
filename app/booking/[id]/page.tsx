@@ -15,14 +15,58 @@ import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { format } from 'date-fns';
 import { CalendarIcon, CheckCircle, Loader2, XCircle, Info, ArrowLeft, ShoppingCart, Mail, Phone, MapPin } from "lucide-react";
+import { User } from 'firebase/auth'; // Import User type
+import Image from 'next/image'; // Import Next.js Image component
+
+// --- Type Definitions ---
+interface RazorpayOptions {
+    key: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    handler: (response: RazorpaySuccessResponse) => void;
+    prefill: {
+        name: string;
+        email: string;
+        contact: string;
+    };
+    notes: Record<string, string | number | boolean>; // Corrected 'any' to a more specific type
+    theme: {
+        color: string;
+    };
+}
+
+interface RazorpaySuccessResponse {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+}
+
+interface RazorpayErrorResponse {
+    error: {
+        code: string;
+        description: string;
+        source: string;
+        step: string;
+        reason: string;
+        metadata: {
+            order_id: string;
+            payment_id: string;
+        };
+    };
+}
+
 
 declare global {
   interface Window {
-    Razorpay: new (options: any) => any;
+    Razorpay: new (options: RazorpayOptions) => {
+        on(event: 'payment.failed', callback: (response: RazorpayErrorResponse) => void): void;
+        open(): void;
+    };
   }
 }
 
-// Type definitions remain the same
 interface Creator {
   id: string;
   fullName: string;
@@ -74,7 +118,7 @@ const BookingPage: React.FC = () => {
   const [creator, setCreator] = useState<Creator | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [razorpayLoading, setRazorpayLoading] = useState(false);
   const [bookingData, setBookingData] = useState<BookingData>({
     step: 1,
@@ -145,7 +189,7 @@ const BookingPage: React.FC = () => {
   // --- Calculate grand total price (including service charge) ---
   const grandTotalPrice = useMemo(() => {
     return subTotalPrice + SERVICE_CHARGE;
-  }, [subTotalPrice, SERVICE_CHARGE]);
+  }, [subTotalPrice]);
 
   // --- Load Razorpay Script ---
   const loadRazorpayScript = useCallback(() => {
@@ -350,7 +394,7 @@ const BookingPage: React.FC = () => {
       serviceCharge: SERVICE_CHARGE, // Explicit service charge
       grandTotalPrice, // Total amount paid, including service charge
       createdAt: Timestamp.now(),
-      status: 'pending' // 'pending', 'confirmed', 'completed', 'cancelled'
+      status: 'pending' as const // 'pending', 'confirmed', 'completed', 'cancelled'
     };
 
     try {
@@ -381,13 +425,13 @@ const BookingPage: React.FC = () => {
     }
 
     const orderAmountInPaise = grandTotalPrice * 100; // Use grandTotalPrice for Razorpay
-    const options = {
+    const options: RazorpayOptions = {
       key: razorpayKeyId,
       amount: orderAmountInPaise,
       currency: "INR",
       name: "Snaapii Influencer Booking", // Updated app name
       description: `Booking for ${creator.fullName}`,
-      handler: async (response: any) => {
+      handler: async (response) => {
         setBookingData(prev => ({
           ...prev,
           payment: {
@@ -443,13 +487,13 @@ const BookingPage: React.FC = () => {
 
     try {
       const rzp1 = new window.Razorpay(options);
-      rzp1.on('payment.failed', (response: any) => {
+      rzp1.on('payment.failed', (response) => {
         setBookingData(prev => ({
             ...prev,
             payment: {
                 status: 'failed',
                 message: `Payment failed: ${response.error.description || 'Unknown error'}`,
-                transactionId: response.error.code
+                transactionId: response.error.metadata.payment_id
             },
             step: 5 // Advance to step 5 to show failure message
         }));
@@ -660,7 +704,7 @@ const BookingPage: React.FC = () => {
             <h3 className="text-2xl font-bold text-gray-800 text-center">
               Your Details
               <span className="block text-sm font-normal text-gray-500 mt-1">
-                Where we'll send booking confirmation
+                Where we&apos;ll send booking confirmation
               </span>
             </h3>
 
@@ -714,7 +758,7 @@ const BookingPage: React.FC = () => {
               <div className="flex">
                 <Info className="h-5 w-5 text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-purple-700">
-                  We'll send booking confirmation and payment details to this email and phone number.
+                  We&apos;ll send booking confirmation and payment details to this email and phone number.
                   Double-check for accuracy.
                 </p>
               </div>
@@ -739,13 +783,16 @@ const BookingPage: React.FC = () => {
               </h4>
               <div className="flex items-center space-x-4 mb-4">
                 {creator.profilePictureUrl && (
-                  <img
+                  <Image
                     src={creator.profilePictureUrl}
                     alt={creator.fullName}
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded-full object-cover border-2 border-purple-300 shadow-md flex-shrink-0"
                     onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = `https://placehold.co/64x64/EEE2FE/6B21A8?text=${creator.fullName.charAt(0)}`;
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.src = `https://placehold.co/64x64/EEE2FE/6B21A8?text=${creator.fullName.charAt(0)}`;
                     }}
                   />
                 )}
@@ -876,11 +923,11 @@ const BookingPage: React.FC = () => {
         return (
           <div className="space-y-8">
              <h3 className="text-2xl font-bold text-gray-800 text-center">
-              Booking Status
-              <span className="block text-sm font-normal text-gray-500 mt-1">
-                Your booking outcome and next steps
-              </span>
-            </h3>
+               Booking Status
+               <span className="block text-sm font-normal text-gray-500 mt-1">
+                 Your booking outcome and next steps
+               </span>
+             </h3>
 
             {payment.status === 'processing' && (
               <div className="flex flex-col items-center justify-center py-6">
@@ -932,10 +979,10 @@ const BookingPage: React.FC = () => {
                   </div>
 
                   <p className="text-sm text-gray-600 mt-6">
-                    We've sent booking details to {bookerDetails.email}
+                    We&apos;ve sent booking details to {bookerDetails.email}
                   </p>
                   <p className="text-sm text-gray-600 mt-2">
-                    You can view your bookings in the "My Orders" section
+                    You can view your bookings in the &quot;My Orders&quot; section
                   </p>
                   
                   {/* Business Contact Details */}
@@ -1111,8 +1158,8 @@ const BookingPage: React.FC = () => {
           )}
            {step === 5 && payment.status === 'processing' && ( // Show processing on step 5 too if payment is still ongoing
              <div className="flex items-center justify-center w-full sm:w-auto px-6 py-2">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing Payment...
+               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+               Processing Payment...
              </div>
            )}
         </div>
@@ -1121,4 +1168,4 @@ const BookingPage: React.FC = () => {
   );
 };
 
-export default BookingPage;
+export default BookingPage; 

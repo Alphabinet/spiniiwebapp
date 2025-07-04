@@ -11,6 +11,7 @@ import {
   Laptop,   // Icon for Tech
   Banknote  // Icon for Finance
 } from "lucide-react";
+import Link from 'next/link'; // Import the Link component
 
 export default function Footer() {
   return (
@@ -52,24 +53,24 @@ export default function Footer() {
             <h3 className="text-lg font-semibold text-white">Quick Links</h3>
             <ul className="space-y-2">
               <li>
-                <a href="/" className="text-gray-400 hover:text-white transition-colors duration-300">
+                <Link href="/" className="text-gray-400 hover:text-white transition-colors duration-300">
                   Home
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/about" className="text-gray-400 hover:text-white transition-colors duration-300">
+                <Link href="/about" className="text-gray-400 hover:text-white transition-colors duration-300">
                   About Us
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/campaign" className="text-gray-400 hover:text-white transition-colors duration-300">
+                <Link href="/campaign" className="text-gray-400 hover:text-white transition-colors duration-300">
                   Campaign
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="/terms-conditions" className="text-gray-400 hover:text-white transition-colors duration-300">
+                <Link href="/terms" className="text-gray-400 hover:text-white transition-colors duration-300">
                   Terms & Conditions
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -176,15 +177,15 @@ export default function Footer() {
             </a>
           </p>
           <div className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2 text-sm">
-            <a href="/privacy" className="text-gray-400 hover:text-white transition-colors duration-300">
+            <Link href="/privacy" className="text-gray-400 hover:text-white transition-colors duration-300">
               Privacy Policy
-            </a>
-            <a href="/terms-conditions" className="text-gray-400 hover:text-white transition-colors duration-300">
+            </Link>
+            <Link href="/terms" className="text-gray-400 hover:text-white transition-colors duration-300">
               Terms & Conditions
-            </a>
-            <a href="/cookie-policy" className="text-gray-400 hover:text-white transition-colors duration-300">
+            </Link>
+            <Link href="/cookiepolicy" className="text-gray-400 hover:text-white transition-colors duration-300">
               Cookie Policy
-            </a>
+            </Link>
           </div>
         </div>
       </div>

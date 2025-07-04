@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check for admin role via custom claims
+    function isAdmin() {
+      return request.auth.token.admin == true;
+    }
+
+    // --- User-Specific Rules ---
+
+    match /users/{userId} {
+      // Admins can read any user's profile.
+      // Regular users can only read/write their own profile.
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      // NEW: Rule for the subcollection where a user's applications are tracked.
+      // A user must be able to read and write to their own application list.
+      match /appliedCampaigns/{campaignId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // --- Application-Wide Collections ---
+
+    match /creatorApplications/{applicationId} {
+      allow read: if isAdmin() || resource.data.status == 'approved' || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (request.auth != null && request.resource.data.userId == request.auth.uid);
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin();
+    }
+
+    // Rules for the 'campaigns' collection
+    match /campaigns/{campaignId} {
+      // UPDATED: Allow any authenticated user to read campaigns.
+      // This is necessary for the campaign discovery page to function.
+      allow read: if request.auth != null;
+      
+      // Only admins can create, update, or delete entire campaigns.
+      allow write: if isAdmin();
+      
+      // Rules for the 'applicants' subcollection within a campaign
+      match /applicants/{applicantId} {
+        // Admins can read all applicants for review.
+        // A user can read their own application document to see its status.
+        allow read: if isAdmin() || (request.auth != null && request.auth.uid == applicantId);
+        
+        // A user can create their own application document when they apply.
+        // The applicantId must match their own UID.
+        allow create: if request.auth != null && request.auth.uid == applicantId;
+        
+        // Admins can update the status of an application (e.g., to 'approved').
+        // A user can delete their own application (withdraw).
+        allow update: if isAdmin();
+        allow delete: if request.auth != null && request.auth.uid == applicantId;
+      }
+    }
+
+    // --- Public & Notification Rules ---
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /trustedClients/{clientId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /artifacts/{appId}/users/{userId}/notifications/{notificationId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if isAdmin();
+    }
+  }
+}
