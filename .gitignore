@@ -1,0 +1,45 @@
+# -------------------------------
+# Node.js & Package Managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+.pnpm-debug.log*
+
+# -------------------------------
+# Next.js Build Output
+.next/
+out/
+build/
+
+# -------------------------------
+# Vercel
+.vercel/
+
+# -------------------------------
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# -------------------------------
+# Firebase Admin SDK Keys (Very Sensitive!)
+spinii-firebase-adminsdk-*.json
+
+# -------------------------------
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# -------------------------------
+# Editor/OS Specific
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# -------------------------------
+# Shell scripts or generated JS
+setCors.js
