@@ -17,14 +17,16 @@ export default function Footer() {
   return (
     <footer className="bg-gray-900 text-white">
       {/* Container for overall padding and max-width */}
-      <div className="container mx-auto px-4 py-8 sm:py-10 md:py-12">
+      {/* Added pb-24 for extra bottom padding on all screen sizes to accommodate a potential fixed bottom nav */}
+      <div className="container mx-auto px-4 py-8 sm:py-10 md:py-12 pb-24 sm:pb-24 md:pb-24">
         {/* Main grid for footer sections, responsive layout */}
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-12">
+        {/* Adjusted gap for smaller screens, and ensured consistent column behavior */}
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-12">
           {/* Company Info Section */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                SNAPII
+                SNAAPII
               </span>
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
@@ -33,12 +35,6 @@ export default function Footer() {
             </p>
             {/* Social Media Icons with updated links */}
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-blue-400 transition-colors duration-300">
-                <Facebook className="h-5 w-5" aria-label="Facebook" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-blue-400 transition-colors duration-300">
-                <Twitter className="h-5 w-5" aria-label="Twitter" />
-              </a>
               <a href="https://www.instagram.com/snaapii?igsh=MXF2bzVqbWVvYnR2dQ==" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-pink-400 transition-colors duration-300">
                 <Instagram className="h-5 w-5" aria-label="Instagram" />
               </a>
@@ -75,73 +71,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Influencer Categories Section - Icons with Purple Color and Dark Purple Background */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-white">Influencer Categories</h3>
-            <ul className="space-y-3 text-sm">
-              <li>
-                <div className="flex items-center mb-1">
-                  <span className="p-2 bg-purple-900 rounded-full flex items-center justify-center mr-2">
-                    <Sparkles className="h-4 w-4 text-purple-300" aria-hidden="true" />
-                  </span>
-                  <strong className="text-white">Lifestyle</strong>
-                </div>
-                <ul className="ml-10 space-y-1"> {/* Adjusted margin-left for better alignment */}
-                  <li><span className="text-gray-400">Fashion & Styling</span></li>
-                  <li><span className="text-gray-400">Skincare & Beauty</span></li>
-                  <li><span className="text-gray-400">Fitness & Wellness</span></li>
-                  <li><span className="text-gray-400">Home Decor</span></li>
-                  <li><span className="text-gray-400">Travel & Experiences</span></li>
-                </ul>
-              </li>
-              <li>
-                <div className="flex items-center mb-1">
-                  <span className="p-2 bg-purple-900 rounded-full flex items-center justify-center mr-2">
-                    <Film className="h-4 w-4 text-purple-300" aria-hidden="true" />
-                  </span>
-                  <strong className="text-white">Entertainment</strong>
-                </div>
-                <ul className="ml-10 space-y-1">
-                  <li><span className="text-gray-400">Comedy</span></li>
-                  <li><span className="text-gray-400">Memes</span></li>
-                  <li><span className="text-gray-400">Music Videos</span></li>
-                  <li><span className="text-gray-400">Series Reviews</span></li>
-                  <li><span className="text-gray-400">Funny</span></li>
-                </ul>
-              </li>
-              <li>
-                <div className="flex items-center mb-1">
-                  <span className="p-2 bg-purple-900 rounded-full flex items-center justify-center mr-2">
-                    <Laptop className="h-4 w-4 text-purple-300" aria-hidden="true" />
-                  </span>
-                  <strong className="text-white">Tech</strong>
-                </div>
-                <ul className="ml-10 space-y-1">
-                  <li><span className="text-gray-400">Mobile & Gadget Review</span></li>
-                  <li><span className="text-gray-400">Unboxing & Tech Setup</span></li>
-                  <li><span className="text-gray-400">Laptop / PC Accessories</span></li>
-                  <li><span className="text-gray-400">App & Software Tutorials</span></li>
-                  <li><span className="text-gray-400">Tech Tips & Hacks</span></li>
-                </ul>
-              </li>
-              <li>
-                <div className="flex items-center mb-1">
-                  <span className="p-2 bg-purple-900 rounded-full flex items-center justify-center mr-2">
-                    <Banknote className="h-4 w-4 text-purple-300" aria-hidden="true" />
-                  </span>
-                  <strong className="text-white">Finance</strong>
-                </div>
-                <ul className="ml-10 space-y-1">
-                  <li><span className="text-gray-400">Stock Market & Investing</span></li>
-                  <li><span className="text-gray-400">Crypto</span></li>
-                  <li><span className="text-gray-400">Saving Tips</span></li>
-                  <li><span className="text-gray-400">Income Ideas</span></li>
-                  <li><span className="text-gray-400">Startup Advice</span></li>
-                </ul>
-              </li>
-            </ul>
-          </div>
-
+         
           {/* Contact Info Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">Contact Us</h3>
@@ -165,7 +95,7 @@ export default function Footer() {
         {/* Bottom Bar - Copyright and Policies */}
         <div className="border-t border-gray-800 mt-8 pt-6 sm:pt-8 flex flex-col md:flex-row justify-between items-center text-center md:text-left">
           <p className="text-gray-400 text-sm mb-4 md:mb-0">
-            © {new Date().getFullYear()} SNAPII. All rights reserved. {" "}
+            © {new Date().getFullYear()} SNAAPII. All rights reserved. {" "}
             Developed by{" "}
             <a
               href="https://alphabinet.com"

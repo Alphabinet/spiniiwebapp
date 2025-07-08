@@ -73,11 +73,8 @@ export default function ContactPage() {
     setSubmitStatus("idle");
 
     try {
-      // Save message to a user-specific collection for privacy and organization
-      const messagesCollectionRef = collection(
-        db,
-        `users/${currentUser.uid}/contactMessages`
-      );
+      // MODIFIED: Save message to a single top-level collection for admin access
+      const messagesCollectionRef = collection(db, "contactMessages");
 
       await addDoc(messagesCollectionRef, {
         ...formData,

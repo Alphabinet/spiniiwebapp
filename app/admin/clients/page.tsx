@@ -4,9 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebaseConfig';
 import { collection, getDocs, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import Image from 'next/image'; // Import the Next.js Image component
+import Image from 'next/image';
 
-// --- TypeScript Interfaces ---
 interface TrustedClient {
   id: string;
   name: string;
@@ -20,21 +19,18 @@ interface Banner {
   image: string;
 }
 
-// --- Main Clients Page Component ---
 const ClientsPage = () => {
   const [trustedClients, setTrustedClients] = useState<TrustedClient[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Trusted Client state
   const [newClientName, setNewClientName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadingClientLogo, setUploadingClientLogo] = useState(false);
   const [clientFormError, setClientFormError] = useState<string | null>(null);
   const [clientImagePreviewUrl, setClientImagePreviewUrl] = useState<string | null>(null);
 
-  // Banner state
   const [newBannerTitle, setNewBannerTitle] = useState('');
   const [newBannerSubtitle, setNewBannerSubtitle] = useState('');
   const [selectedBannerFile, setSelectedBannerFile] = useState<File | null>(null);
@@ -46,7 +42,6 @@ const ClientsPage = () => {
     const fetchAllData = async () => {
       setLoading(true);
       try {
-        // Fetch trusted clients
         const trustedClientsSnapshot = await getDocs(collection(db, "trustedClients"));
         const trustedClientsData = trustedClientsSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -54,7 +49,6 @@ const ClientsPage = () => {
         } as TrustedClient));
         setTrustedClients(trustedClientsData);
 
-        // Fetch banners
         const bannersSnapshot = await getDocs(collection(db, "banners"));
         const bannersData = bannersSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -72,7 +66,6 @@ const ClientsPage = () => {
     fetchAllData();
   }, []);
 
-  // --- Trusted Client Logo Management ---
   const handleClientFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -122,7 +115,6 @@ const ClientsPage = () => {
         logoUrl: downloadURL
       }]);
 
-      // Reset form
       setNewClientName('');
       setSelectedFile(null);
       setClientImagePreviewUrl(null);
@@ -155,7 +147,6 @@ const ClientsPage = () => {
     }
   };
 
-  // --- Banner Management ---
   const handleBannerFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -165,9 +156,25 @@ const ClientsPage = () => {
         setBannerImagePreviewUrl(null);
         return;
       }
-      setSelectedBannerFile(file);
-      setBannerFormError(null);
-      setBannerImagePreviewUrl(URL.createObjectURL(file));
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new (window as any).Image();
+        img.onload = () => {
+          const { width, height } = img;
+          if ((width === 1920 && height === 730) || (width === 1200 && height === 456)) {
+            setSelectedBannerFile(file);
+            setBannerFormError(null);
+            setBannerImagePreviewUrl(URL.createObjectURL(file));
+          } else {
+            setBannerFormError("Invalid banner dimensions. Allowed sizes are 1920x730px or 1200x456px.");
+            setSelectedBannerFile(null);
+            setBannerImagePreviewUrl(null);
+          }
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     } else {
       setSelectedBannerFile(null);
       setBannerImagePreviewUrl(null);
@@ -207,7 +214,6 @@ const ClientsPage = () => {
         image: downloadURL
       }]);
 
-      // Reset form
       setNewBannerTitle('');
       setNewBannerSubtitle('');
       setSelectedBannerFile(null);
@@ -243,280 +249,239 @@ const ClientsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-10">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-        <p className="ml-4 text-gray-600">Loading Clients and Banners...</p>
+      <div className="flex flex-col items-center justify-center p-4 min-h-screen">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-indigo-500"></div>
+        <p className="mt-3 text-gray-600 text-sm">Loading Clients and Banners...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center p-10 text-red-600">
-        <p>Error: {error}</p>
-        <p>Please try refreshing the page.</p>
+      <div className="text-center p-4 text-red-600">
+        <p className="text-sm">Error: {error}</p>
+        <p className="mt-1 text-sm">Please try refreshing the page.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 p-6 bg-gray-50 min-h-screen">
+    <div className="space-y-4 p-4 bg-gray-50 min-h-screen">
       {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl shadow-md">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
-          <p className="mt-1 text-gray-600">Manage trusted brands and homepage banners.</p>
-        </div>
+      <header className="bg-white p-4 rounded-lg shadow-sm">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Admin Dashboard</h1>
+        <p className="mt-1 text-xs sm:text-sm text-gray-600">Manage trusted brands and homepage banners</p>
       </header>
 
-      {/* Section 1: Manage Trusted Client Logos */}
-      <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Manage Trusted Client Logos</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Add Client Form */}
-          <div className="lg:col-span-1 bg-gray-50 p-6 rounded-xl border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-800 mb-4">Add New Logo</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="client-name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Client Name
-                </label>
-                <input
-                  type="text"
-                  id="client-name"
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                  placeholder="e.g., Brandify Inc."
-                  className="w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="logo-upload" className="block text-sm font-medium text-gray-700 mb-1">
-                  Upload Logo (PNG, JPG)
-                </label>
-                <input
-                  type="file"
-                  id="logo-upload"
-                  accept="image/*"
-                  onChange={handleClientFileChange}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
-              </div>
-              {clientImagePreviewUrl && (
-                <div className="mt-2">
-                  <Image
-                    src={clientImagePreviewUrl}
-                    alt="Logo Preview"
-                    width={150}
-                    height={96}
-                    className="max-h-24 mx-auto object-contain border rounded-md p-1"
-                  />
-                </div>
-              )}
-              {clientFormError && (
-                <p className="text-xs text-red-600 mt-2">{clientFormError}</p>
-              )}
-              <button
-                onClick={handleAddTrustedClient}
-                disabled={uploadingClientLogo}
-                className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium disabled:bg-indigo-400 disabled:cursor-not-allowed"
-              >
-                {uploadingClientLogo ? 'Uploading...' : 'Add Client Logo'}
-              </button>
+      {/* Section 1: Trusted Clients */}
+      <section className="bg-white p-4 rounded-lg shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-700 mb-3">Trusted Client Logos</h2>
+        
+        {/* Add Client Form */}
+        <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <h3 className="text-md font-medium text-gray-800 mb-3">Add New Logo</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                Client Name
+              </label>
+              <input
+                value={newClientName}
+                onChange={(e) => setNewClientName(e.target.value)}
+                placeholder="e.g., Brandify Inc."
+                className="w-full rounded border border-gray-300 p-2 text-xs sm:text-sm"
+              />
             </div>
+            
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                Upload Logo (PNG, JPG)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleClientFileChange}
+                className="w-full text-xs sm:text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700"
+              />
+            </div>
+            
+            {clientImagePreviewUrl && (
+              <div className="mt-1 flex justify-center">
+                <Image
+                  src={clientImagePreviewUrl}
+                  alt="Logo Preview"
+                  width={120}
+                  height={80}
+                  className="max-h-20 object-contain border rounded p-1"
+                />
+              </div>
+            )}
+            
+            {clientFormError && (
+              <p className="text-xs text-red-600">{clientFormError}</p>
+            )}
+            
+            <button
+              onClick={handleAddTrustedClient}
+              disabled={uploadingClientLogo}
+              className="w-full px-3 py-2 bg-indigo-600 text-white rounded text-xs sm:text-sm font-medium disabled:bg-indigo-400"
+            >
+              {uploadingClientLogo ? 'Uploading...' : 'Add Client Logo'}
+            </button>
           </div>
+        </div>
 
-          {/* Existing Clients Table */}
-          <div className="lg:col-span-2 bg-gray-50 p-6 rounded-xl border border-gray-200 overflow-x-auto">
-            <h3 className="text-lg font-medium text-gray-800 mb-4">
-              Existing Logos ({trustedClients.length})
-            </h3>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Logo
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Client Name
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {trustedClients.length > 0 ? (
-                  trustedClients.map((client) => (
-                    <tr key={client.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <Image
-                          src={client.logoUrl}
-                          alt={`${client.name} logo`}
-                          width={80}
-                          height={40}
-                          className="h-10 w-auto object-contain"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                        {client.name}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => handleDeleteTrustedClient(client.id, client.logoUrl)}
-                          className="text-red-500 hover:text-red-700 text-sm font-medium"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={3} className="px-6 py-10 text-center text-sm text-gray-500">
-                      No trusted client logos added yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        {/* Existing Clients */}
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <h3 className="text-md font-medium text-gray-800 mb-3">
+            Existing Logos ({trustedClients.length})
+          </h3>
+          
+          {trustedClients.length === 0 ? (
+            <p className="text-center text-xs sm:text-sm text-gray-500 py-4">
+              No trusted client logos added yet
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {trustedClients.map((client) => (
+                <div key={client.id} className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col items-center">
+                  <div className="mb-2 flex justify-center">
+                    <Image
+                      src={client.logoUrl}
+                      alt={`${client.name} logo`}
+                      width={80}
+                      height={50}
+                      className="h-12 object-contain"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-800 font-medium text-center mb-2 truncate w-full">
+                    {client.name}
+                  </p>
+                  <button
+                    onClick={() => handleDeleteTrustedClient(client.id, client.logoUrl)}
+                    className="text-red-500 hover:text-red-700 text-xs font-medium"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* Section 2: Manage Homepage Banners */}
-      <section className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-        <h2 className="text-xl font-semibold text-gray-700 mb-4">Manage Homepage Banners</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Add Banner Form */}
-          <div className="lg:col-span-1 bg-gray-50 p-6 rounded-xl border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-800 mb-4">Add New Banner</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="banner-title" className="block text-sm font-medium text-gray-700 mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  id="banner-title"
-                  value={newBannerTitle}
-                  onChange={(e) => setNewBannerTitle(e.target.value)}
-                  placeholder="e.g., Discover Top Talent"
-                  className="w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="banner-subtitle" className="block text-sm font-medium text-gray-700 mb-1">
-                  Subtitle
-                </label>
-                <textarea
-                  id="banner-subtitle"
-                  value={newBannerSubtitle}
-                  onChange={(e) => setNewBannerSubtitle(e.target.value)}
-                  placeholder="e.g., Collaborate with the best creators."
-                  rows={2}
-                  className="w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-sm"
-                ></textarea>
-              </div>
-              <div>
-                <label htmlFor="banner-image-upload" className="block text-sm font-medium text-gray-700 mb-1">
-                  Upload Banner Image (PNG, JPG)
-                </label>
-                <input
-                  type="file"
-                  id="banner-image-upload"
-                  accept="image/*"
-                  onChange={handleBannerFileChange}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
-              </div>
-              {bannerImagePreviewUrl && (
-                <div className="mt-2">
-                  <Image
-                    src={bannerImagePreviewUrl}
-                    alt="Banner Preview"
-                    width={150}
-                    height={96}
-                    className="max-h-24 mx-auto object-contain border rounded-md p-1"
-                  />
-                </div>
-              )}
-              {bannerFormError && (
-                <p className="text-xs text-red-600 mt-2">{bannerFormError}</p>
-              )}
-              <button
-                onClick={handleAddBanner}
-                disabled={uploadingBanner}
-                className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium disabled:bg-indigo-400 disabled:cursor-not-allowed"
-              >
-                {uploadingBanner ? 'Uploading...' : 'Add Homepage Banner'}
-              </button>
+      {/* Section 2: Homepage Banners */}
+      <section className="bg-white p-4 rounded-lg shadow-sm">
+        <h2 className="text-lg font-semibold text-gray-700 mb-3">Homepage Banners</h2>
+        
+        {/* Add Banner Form */}
+        <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <h3 className="text-md font-medium text-gray-800 mb-3">Add New Banner</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                Title
+              </label>
+              <input
+                value={newBannerTitle}
+                onChange={(e) => setNewBannerTitle(e.target.value)}
+                placeholder="e.g., Discover Top Talent"
+                className="w-full rounded border border-gray-300 p-2 text-xs sm:text-sm"
+              />
             </div>
+            
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                Subtitle
+              </label>
+              <textarea
+                value={newBannerSubtitle}
+                onChange={(e) => setNewBannerSubtitle(e.target.value)}
+                placeholder="e.g., Collaborate with the best creators."
+                rows={2}
+                className="w-full rounded border border-gray-300 p-2 text-xs sm:text-sm"
+              ></textarea>
+            </div>
+            
+            <div>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                Upload Banner Image (Allowed sizes: 1920x730px or 1200x456px)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleBannerFileChange}
+                className="w-full text-xs sm:text-sm text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700"
+              />
+            </div>
+            
+            {bannerImagePreviewUrl && (
+              <div className="mt-1 flex justify-center">
+                <Image
+                  src={bannerImagePreviewUrl}
+                  alt="Banner Preview"
+                  width={150}
+                  height={100}
+                  className="max-h-24 object-contain border rounded p-1"
+                />
+              </div>
+            )}
+            
+            {bannerFormError && (
+              <p className="text-xs text-red-600">{bannerFormError}</p>
+            )}
+            
+            <button
+              onClick={handleAddBanner}
+              disabled={uploadingBanner}
+              className="w-full px-3 py-2 bg-indigo-600 text-white rounded text-xs sm:text-sm font-medium disabled:bg-indigo-400"
+            >
+              {uploadingBanner ? 'Uploading...' : 'Add Homepage Banner'}
+            </button>
           </div>
+        </div>
 
-          {/* Existing Banners Table */}
-          <div className="lg:col-span-2 bg-gray-50 p-6 rounded-xl border border-gray-200">
-            <h3 className="text-lg font-medium text-gray-800 mb-4">
-              Existing Banners ({banners.length})
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Image
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Title
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Subtitle
-                    </th>
-                    <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {banners.length > 0 ? (
-                    banners.map((banner) => (
-                      <tr key={banner.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <Image
-                            src={banner.image}
-                            alt={banner.title}
-                            width={128}
-                            height={64}
-                            className="h-16 w-auto object-cover rounded-md"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-800">
-                          {banner.title}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {banner.subtitle}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => handleDeleteBanner(banner.id, banner.image)}
-                            className="text-red-500 hover:text-red-700 text-sm font-medium"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-500">
-                        No banners added yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {/* Existing Banners */}
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <h3 className="text-md font-medium text-gray-800 mb-3">
+            Existing Banners ({banners.length})
+          </h3>
+          
+          {banners.length === 0 ? (
+            <p className="text-center text-xs sm:text-sm text-gray-500 py-4">
+              No banners added yet
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {banners.map((banner) => (
+                <div key={banner.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-shrink-0">
+                      <Image
+                        src={banner.image}
+                        alt={banner.title}
+                        width={120}
+                        height={80}
+                        className="h-20 w-full object-cover rounded-md"
+                      />
+                    </div>
+                    <div className="flex-grow">
+                      <h4 className="text-sm font-medium text-gray-800">{banner.title}</h4>
+                      <p className="text-xs text-gray-600 mt-1">{banner.subtitle}</p>
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={() => handleDeleteBanner(banner.id, banner.image)}
+                          className="text-red-500 hover:text-red-700 text-xs font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </section>
     </div>

@@ -9,13 +9,12 @@ import {
   Bell,
   User,
   LogIn,
-  // ShoppingCart, // Removed unused import
   LogOut,
   Settings,
   LayoutDashboard,
   CheckCircle,
   Info,
-  ShieldCheck, // Added for Admin Panel
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -29,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import Image from 'next/image'; // Import the Next.js Image component
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -47,7 +46,7 @@ import {
   onSnapshot,
   updateDoc,
   writeBatch,
-  Timestamp, // Import Firestore Timestamp
+  Timestamp,
 } from 'firebase/firestore';
 
 
@@ -57,20 +56,20 @@ interface UserProfile {
   email: string | null;
   name: string | null;
   photoURL: string | null;
-  isAdmin: boolean; // Added to track admin status
+  isAdmin: boolean;
 }
 
 interface NotificationItem {
   id: string;
   message: string;
-  timestamp: Timestamp; // Use the imported Firestore Timestamp type
+  timestamp: Timestamp;
   read: boolean;
   type: 'approval' | 'message' | 'announcement';
   link?: string;
 }
 
 // --- Component ---
-export default function Navigation() { // Removed empty props interface
+export default function Navigation() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -88,9 +87,9 @@ export default function Navigation() { // Removed empty props interface
 
   const displayDesktopNotification = useCallback((message: string, link?: string) => {
     if ("Notification" in window && Notification.permission === "granted") {
-      const notification = new Notification("SNAPII Notification", {
+      const notification = new Notification("Snaapii Notification", {
         body: message,
-        icon: "/snapi_logo.png",
+        icon: "/snaapii.png",
       });
       if (link) {
         notification.onclick = (event) => {
@@ -109,11 +108,9 @@ export default function Navigation() { // Removed empty props interface
     if (user) {
       const fetchUserProfileAndClaims = async () => {
         try {
-          // Force a refresh of the token to get the latest custom claims
           const idTokenResult = await user.getIdTokenResult(true);
           const isAdmin = idTokenResult.claims.admin === true;
 
-          // Keep your existing logic to fetch user data from Firestore
           const userRef = doc(db, "users", user.uid);
           const docSnap = await getDoc(userRef);
 
@@ -133,17 +130,15 @@ export default function Navigation() { // Removed empty props interface
             };
           }
 
-          // Set the complete user profile, including the admin status
           setUserProfile({
             uid: user.uid,
             email: user.email,
-            isAdmin: isAdmin, // Set admin status from claims
+            isAdmin: isAdmin,
             ...profileData,
           });
 
         } catch (error) {
           console.error("Error fetching user profile and claims:", error);
-          // Provide a safe fallback if fetching claims fails
           setUserProfile({
             uid: user.uid,
             email: user.email,
@@ -155,7 +150,6 @@ export default function Navigation() { // Removed empty props interface
       };
       fetchUserProfileAndClaims();
     } else {
-      // This part remains the same
       setUserProfile(null);
       setNotifications([]);
       setUnreadCount(0);
@@ -213,7 +207,8 @@ export default function Navigation() { // Removed empty props interface
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      router.push("/signin");
+      // Redirect to the desired relative sign-in page
+      router.push("/signin"); // Confirmed path
       setIsSheetOpen(false);
     } catch (error) {
       console.error("Error signing out:", error);
@@ -225,13 +220,26 @@ export default function Navigation() { // Removed empty props interface
     setIsSheetOpen(false);
   }
 
-  const scrollToSearchBar = () => {
+  // --- UPDATED: handleSearchClick function ---
+  const handleSearchClick = () => {
+    setIsSheetOpen(false); // Close mobile sheet if open
+
+    // Check if we are already on the homepage
     if (window.location.pathname === "/") {
-      document.getElementById("homepage-search-bar")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Attempt to call the global function defined in app/page.tsx
+      if (typeof window !== 'undefined' && typeof (window as any).focusHomepageSearchBar === 'function') {
+        (window as any).focusHomepageSearchBar();
+      } else {
+        // Fallback: If the global function isn't available (e.g., component not mounted yet),
+        // try to scroll to the section. Focusing might not work immediately.
+        // The ID should be on the <section> tag itself.
+        document.getElementById("homepage-search-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     } else {
-      router.push("/#homepage-search-bar");
+      // If not on the homepage, navigate there with a specific hash.
+      // The homepage component will then listen for this hash and call its focus function.
+      router.push("/#focus-search-input");
     }
-    setIsSheetOpen(false);
   };
 
   const markNotificationAsRead = async (notificationId: string) => {
@@ -271,7 +279,7 @@ export default function Navigation() { // Removed empty props interface
 
   const mobileBottomNavItems = [
     { name: "Home", href: "/", icon: Home },
-    { name: "Search", action: scrollToSearchBar, icon: Search },
+    { name: "Search", onClick: handleSearchClick, icon: Search },
     { name: "Campaigns", href: "/campaign", icon: Megaphone },
     { name: "Notifications", icon: Bell },
     { name: user ? "Profile" : "Sign In", icon: user ? User : LogIn },
@@ -313,12 +321,14 @@ export default function Navigation() { // Removed empty props interface
           <div className="flex items-center justify-between h-16">
             {/* Left: Logo */}
             <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg">
-                <span className="text-white font-extrabold text-lg">S</span>
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-600 bg-clip-text text-transparent group-hover:opacity-80 transition-opacity duration-300">
-                SNAPII
-              </span>
+              <Image
+                src="/snaapii.png" // Path to your PNG logo in the public folder
+                alt="Snaapii Logo" // Alt text for accessibility
+                width={100} // Adjust width as needed
+                height={100} // Adjust height as needed
+                className="transition-all duration-300 group-hover:scale-110 group"
+              />
+              <span className="sr-only">Snaapii</span> {/* Visually hidden text for accessibility */}
             </Link>
 
             {/* Center: Nav Items */}
@@ -448,15 +458,16 @@ export default function Navigation() { // Removed empty props interface
       </nav>
 
       {/* Mobile Top Bar with Side Sheet Trigger */}
-      <nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50 backdrop-blur-md bg-opacity-80">
+      <nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="flex items-center justify-between h-16 px-4">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
-            </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              SNAPII
-            </span>
+            <Image
+              src="/snaapii.png" // Path to your PNG logo in the public folder
+              alt="Snaapii Logo" // Alt text for accessibility
+              width={100} // Adjust width for mobile
+              height={100} // Adjust height for mobile
+            />
+            <span className="sr-only">Snaapii</span> {/* Visually hidden text for accessibility */}
           </Link>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="text-gray-700 hover:bg-gray-100">
@@ -533,11 +544,14 @@ export default function Navigation() { // Removed empty props interface
                   </DropdownMenuContent>
                 </DropdownMenu>
               );
+            } else if (item.onClick) {
+              return (<button key={item.name} onClick={item.onClick} className={commonClasses}>{itemContent}</button>);
             } else if (isProfileOrSignIn) {
-              return (<SheetTrigger asChild key={item.name}><button className={commonClasses}>{itemContent}</button></SheetTrigger>);
-            } else if (item.action) {
-              return (<button key={item.name} onClick={item.action} className={commonClasses}>{itemContent}</button>);
-            } else {
+                // Special handling for Profile/Sign In in mobile bottom nav
+                const targetHref = user ? "/dashboard" : "/signin"; // Confirmed path
+                return (<Link key={item.name} href={targetHref} className={commonClasses}>{itemContent}</Link>);
+            }
+            else {
               return (<Link key={item.name} href={item.href || "#"} className={commonClasses}>{itemContent}</Link>);
             }
           })}
@@ -563,7 +577,6 @@ export default function Navigation() { // Removed empty props interface
             <>
               <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><LayoutDashboard className="h-5 w-5 text-gray-600" /> Dashboard</Link>
               <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Settings className="mr-0 h-5 w-5 text-gray-600" /> Manage Profile</Link>
-              {/* Mobile Admin Panel Link */}
               {userProfile?.isAdmin && (
                 <Link href="/admin" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50">
                   <ShieldCheck className="h-5 w-5 text-gray-600" /> Admin Panel

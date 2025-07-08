@@ -68,9 +68,7 @@ export default function AboutPage() {
             Connecting Brands with the Pulse of Influence
           </h1>
           <p className="text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">
-            We are a platform dedicated to revolutionizing the way brands and digital
-            creators collaborate, making influencer marketing accessible, transparent,
-            and effective.
+            At Snaapii, we’re building more than just a platform — we’re creating a space where influencers and brands connect with purpose.
           </p>
         </motion.header>
 
@@ -86,11 +84,15 @@ export default function AboutPage() {
             <div className="md:w-full text-center">
               <h2 className="text-4xl font-bold text-gray-900 mb-6">Our Mission</h2>
               <p className="text-gray-700 text-lg leading-relaxed max-w-3xl mx-auto">
-                Our mission is to Empower both brands and Creators. We provide brands
-                with a curated marketplace to find verified creators who align with
-                their values, and we equip creators with the tools to monetize their
-                influence fairly and transparently. We believe in fostering a community
-                built on trust, creativity, and mutual growth.
+                We started with a simple observation: talented creators were struggling to find the right brand opportunities, and brands were spending too much time finding trusted influencers. That’s where Snaapii comes in.
+
+                Our platform helps verified creators showcase their work, and lets brands discover and collaborate with them through a streamlined, transparent system. From paid campaigns to content services, we make influencer marketing simple, secure, and scalable.
+
+                Every feature on Snaapii is built with one goal in mind — to help creators grow, and help brands reach the right audience through real voices and impactful content.
+
+                We’re passionate about creative freedom, honest collaborations, and building a community that supports and uplifts both sides of the creator economy.
+
+                Welcome to Snaapii — where stories begin, and partnerships thrive.
               </p>
             </div>
           </div>

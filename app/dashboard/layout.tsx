@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -31,8 +31,9 @@ export default function DashboardLayout({
   const router = useRouter();
 
   useEffect(() => {
+    // If not loading and no user is authenticated, redirect to /signin
     if (!loading && !user) {
-      router.push("/login");
+      router.push("/signin"); // Corrected path
     }
   }, [user, loading, router]);
 
@@ -44,7 +45,7 @@ export default function DashboardLayout({
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.push("/signin");
+      router.push("/signin"); // This was already correct
     } catch (err) {
       console.error("Logout error:", err);
     }
@@ -91,7 +92,7 @@ export default function DashboardLayout({
                     <div className="flex items-center gap-4">
                         <div className="text-right hidden sm:block">
                             <p className="text-sm font-medium text-gray-800">{user.displayName || user.email}</p>
-                            <p className="text-xs text-gray-500">Creator</p>
+                            <p className="text-xs text-gray-500">Current User</p>
                         </div>
                         <button
                             onClick={handleLogout}
@@ -105,7 +106,7 @@ export default function DashboardLayout({
             </div>
             {/* Mobile Navigation */}
             <nav className="md:hidden border-t border-gray-200">
-                 <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex justify-around">
+                   <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex justify-around">
                     {navLinks.map((link) => (
                         <Link
                             key={link.name}
@@ -120,7 +121,7 @@ export default function DashboardLayout({
                             {link.name}
                         </Link>
                     ))}
-                 </div>
+                   </div>
             </nav>
         </header>
 

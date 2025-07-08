@@ -160,11 +160,7 @@ export default function CreatorDetailPage() {
             <Skeleton className="h-24 rounded-lg bg-gray-200" />
             <Skeleton className="h-24 rounded-lg bg-gray-200" />
           </div>
-          <Skeleton className="h-8 w-full rounded-lg mb-4 bg-gray-200" />
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <Skeleton className="h-24 rounded-lg bg-gray-200" />
-            <Skeleton className="h-24 rounded-lg bg-gray-200" />
-          </div>
+          <Skeleton className="h-24 rounded-lg bg-gray-200" /> {/* Added skeleton for third grid item if needed */}
           <Skeleton className="h-12 w-2/3 mx-auto mt-8 rounded-full bg-gray-200" />
         </div>
       </div>
@@ -220,7 +216,7 @@ export default function CreatorDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800">
-      <div className="container max-w-xl mx-auto py-8 px-4">
+      <div className="container max-w-xl mx-auto py-8 px-4 mb-24"> {/* Added margin-bottom here */}
         <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-200">
 
           <section className="bg-gradient-to-br from-purple-200 to-indigo-200 text-white p-8 pt-12 pb-10 relative z-10 rounded-t-3xl">
@@ -246,17 +242,18 @@ export default function CreatorDetailPage() {
                 </a>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6 text-center">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner">
-                <p className="text-3xl font-bold text-gray-800">{formatNumber(creator.totalFollowers)}</p>
+            {/* Vertically stacked stats in a 3x3 grid (adapts to 1x3 on smaller screens) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-6 text-center">
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner flex flex-col justify-center items-center">
+                <p className="text-2xl font-bold text-gray-800">{formatNumber(creator.totalFollowers)}</p>
                 <p className="text-sm font-semibold text-gray-600">Followers</p>
               </div>
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner">
-                <p className="text-3xl font-bold text-gray-800">{formatNumber(creator.avgReelViews)}</p>
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner flex flex-col justify-center items-center">
+                <p className="text-2xl font-bold text-gray-800">{formatNumber(creator.avgReelViews)}</p>
                 <p className="text-sm font-semibold text-gray-600">Avg. Reel Views</p>
               </div>
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner">
-                <p className="text-3xl font-bold text-gray-800">{formatNumber(creator.storyAverageViews)}</p>
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-inner flex flex-col justify-center items-center">
+                <p className="text-2xl font-bold text-gray-800">{formatNumber(creator.storyAverageViews)}</p>
                 <p className="text-sm font-semibold text-gray-600">Avg. Story Views</p>
               </div>
             </div>
@@ -265,7 +262,7 @@ export default function CreatorDetailPage() {
           <div className="p-6 space-y-8">
             <section>
               <div className="flex items-center flex-wrap gap-2">
-                <h2 className="text-xl font-bold text-gray-900 flex items-center shrink-0">
+                <h2 className="text-md font-bold text-gray-900 flex items-center shrink-0">
                   <Briefcase className="h-6 w-6 text-gray-600 mr-2" /> Content Category:
                 </h2>
                 <div className="flex flex-wrap gap-2">
@@ -282,50 +279,50 @@ export default function CreatorDetailPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <h2 className="text-md font-bold text-gray-900 mb-4 flex items-center">
                 <Globe className="h-6 w-6 text-gray-600 mr-2" /> Content Details
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-lg font-semibold text-gray-800">Languages:</p>
+                  <p className="text-sm font-semibold text-gray-800">Languages:</p>
                   <p className="text-gray-700 text-base">{contentLanguagesDisplay}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-lg font-semibold text-gray-800">Delivery:</p>
+                  <p className="text-sm font-semibold text-gray-800">Delivery:</p>
                   <p className="text-gray-700 text-base">{deliveryDurationDisplay}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-lg font-semibold text-gray-800">Base Location:</p>
+                  <p className="text-sm font-semibold text-gray-800">Base Location:</p>
                   <p className="text-gray-700 text-base">{topLocationDisplay}</p>
                 </div>
               </div>
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
+              <h2 className="text-md font-bold text-gray-900 mb-4 flex items-center">
                 <DollarSign className="h-6 w-6 text-gray-600 mr-2" /> Pricing
               </h2>
               <div className={
                 parseInt(creator.reelsStoryPrice) > 0 && parseInt(creator.reelsStoryPrice) !== 0
-                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
+                  ? "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4"
                   : "grid grid-cols-1 sm:grid-cols-2 gap-4"
               }>
                 <div className="bg-gray-50 p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center justify-center transition-transform duration-200 hover:scale-105 hover:shadow-md">
-                  <h3 className="text-base font-semibold text-gray-800 mb-1">Reel</h3>
-                  <p className="text-purple-600 font-bold text-2xl">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-1">Reel</h3>
+                  <p className="text-purple-600 font-bold text-xl">
                     ₹{parseInt(creator.reelPrice).toLocaleString('en-IN')}
                   </p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center justify-center transition-transform duration-200 hover:scale-105 hover:shadow-md">
-                  <h3 className="text-base font-semibold text-gray-800 mb-1">Story</h3>
-                  <p className="text-purple-600 font-bold text-2xl">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-1">Story</h3>
+                  <p className="text-purple-600 font-bold text-xl">
                     ₹{parseInt(creator.storyPrice).toLocaleString('en-IN')}
                   </p>
                 </div>
                 {parseInt(creator.reelsStoryPrice) > 0 && parseInt(creator.reelsStoryPrice) !== 0 && (
                   <div className="bg-gray-50 p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col items-center justify-center transition-transform duration-200 hover:scale-105 hover:shadow-md">
-                    <h3 className="text-base font-semibold text-gray-800 mb-1">Reel + Story (Bundle)</h3>
-                    <p className="text-purple-600 font-bold text-2xl">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-1">Reel + Story (Bundle)</h3>
+                    <p className="text-purple-600 font-bold text-xl">
                       ₹{parseInt(creator.reelsStoryPrice).toLocaleString('en-IN')}
                     </p>
                   </div>

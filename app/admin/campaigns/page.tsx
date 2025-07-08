@@ -5,9 +5,9 @@ import { db } from '@/lib/firebaseConfig';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, where, getDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import { FirestoreTimestamp, CampaignDoc, CampaignApplicantDoc, CampaignWithDetails } from './campaignTypes';
+import { Instagram } from 'lucide-react'; // Import Instagram icon
 
-// --- Type Definitions (assuming from campaignTypes.ts) ---
+// Re-defining types locally for clarity within the immersive
 interface FirestoreTimestamp {
   seconds: number;
   nanoseconds: number;
@@ -19,6 +19,8 @@ interface CampaignApplicantDoc {
   userName?: string;
   userEmail?: string;
   userPhone?: string;
+  instagramUsername?: string; // Added Instagram username field
+  instagramProfile?: string; // Already exists
   appliedAt: FirestoreTimestamp;
   status: 'pending' | 'approved' | 'rejected';
 }
@@ -44,7 +46,6 @@ interface CampaignWithDetails extends CampaignDoc {
   applicants: CampaignApplicantDoc[];
 }
 
-// --- Constants ---
 const CAMPAIGNS_PER_PAGE = 10;
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
@@ -53,7 +54,6 @@ const STATUS_OPTIONS = [
   { value: 'rejected', label: 'Rejected' }
 ];
 
-// --- Helper Functions ---
 const formatDate = (dateInput: FirestoreTimestamp | string | null | undefined): string => {
   if (!dateInput) return 'N/A';
 
@@ -62,7 +62,7 @@ const formatDate = (dateInput: FirestoreTimestamp | string | null | undefined): 
       ? new Date(dateInput)
       : new Date(dateInput.seconds * 1000 + dateInput.nanoseconds / 1000000);
 
-    return isNaN(date.getTime()) ? 'Invalid Date' : format(date, 'MMM d, yyyy, h:mm a');
+    return isNaN(date.getTime()) ? 'Invalid Date' : format(date, 'MMM d,yyyy, h:mm a');
   } catch (error) {
     console.error("Date formatting error:", error);
     return 'Invalid Date';
@@ -72,31 +72,21 @@ const formatDate = (dateInput: FirestoreTimestamp | string | null | undefined): 
 const formatCurrency = (amount: number | null | undefined): string => {
   return typeof amount === 'number'
     ? new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount)
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(amount)
     : 'N/A';
 };
 
 const mapFirestoreDocToCampaign = (doc: QueryDocumentSnapshot<DocumentData>): CampaignDoc => {
   const data = doc.data();
-
-  // Validate critical fields
-  const criticalFields = ['campaignName', 'brandName'];
-  criticalFields.forEach(field => {
-    if (!data[field]) {
-      console.warn(`Data Quality Alert: Campaign ${doc.id} missing '${field}'`);
-    }
-  });
-
   return {
     id: doc.id,
     ...data
   } as CampaignDoc;
 };
 
-// --- Main Component ---
 const CampaignsPage = () => {
   const [campaigns, setCampaigns] = useState<CampaignWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,10 +97,17 @@ const CampaignsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
-  const [phoneNumbers, setPhoneNumbers] = useState<Record<string, string>>({});
+  const [userDetails, setUserDetails] = useState<Record<string, {phone?: string, instagramProfile?: string, instagramUsername?: string}>>({});
+  const [isMobile, setIsMobile] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Close dialog when clicking outside
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dialogRef.current && !dialogRef.current.contains(event.target as Node)) {
@@ -127,7 +124,6 @@ const CampaignsPage = () => {
     };
   }, [isDialogOpen]);
 
-  // Real-time data fetching with error boundary
   useEffect(() => {
     let unsubscribeCampaigns: () => void;
     const unsubscribes: (() => void)[] = [];
@@ -143,26 +139,24 @@ const CampaignsPage = () => {
         setLoading(true);
         const campaignsData = campaignsSnapshot.docs.map(mapFirestoreDocToCampaign);
 
-        // Clear previous listeners
         unsubscribes.forEach(unsub => unsub());
         unsubscribes.length = 0;
 
-        // Setup real-time listeners for applicants
         for (const campaign of campaignsData) {
           const applicantsQuery = query(
             collection(db, `campaigns/${campaign.id}/applicants`),
-            where("status", "==", "pending")
+            where("status", "==", "pending") // Only listen to pending for real-time updates
           );
 
           const unsubscribe = onSnapshot(applicantsQuery, (applicantsSnapshot) => {
             setCampaigns(prev => prev.map(c =>
               c.id === campaign.id
                 ? {
-                  ...c, applicants: applicantsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                  } as CampaignApplicantDoc))
-                }
+                    ...c, applicants: applicantsSnapshot.docs.map(doc => ({
+                      id: doc.id,
+                      ...doc.data()
+                    } as CampaignApplicantDoc))
+                  }
                 : c
             ));
           }, (error) => {
@@ -172,10 +166,9 @@ const CampaignsPage = () => {
           unsubscribes.push(unsubscribe);
         }
 
-        // Initialize campaigns with empty applicants
         setCampaigns(campaignsData.map(campaign => ({
           ...campaign,
-          applicants: []
+          applicants: [] // Initialize applicants as empty, will be populated by sub-listeners
         })));
 
         setLoading(false);
@@ -196,11 +189,10 @@ const CampaignsPage = () => {
     };
   }, []);
 
-  // Status update handler
   const updateCampaignStatus = useCallback(async (campaignId: string, newStatus: CampaignDoc['status']) => {
     if (!db) return;
 
-    // Optimistic update
+    // Optimistically update UI
     setCampaigns(prev => prev.map(campaign =>
       campaign.id === campaignId ? { ...campaign, status: newStatus } : campaign
     ));
@@ -218,7 +210,7 @@ const CampaignsPage = () => {
       console.error("Update failed:", error);
       toast.error("Update failed. Please try again.");
 
-      // Revert on error
+      // Revert UI on error
       const originalCampaign = campaigns.find(c => c.id === campaignId);
       setCampaigns(prev => prev.map(campaign =>
         campaign.id === campaignId
@@ -230,18 +222,17 @@ const CampaignsPage = () => {
     }
   }, [campaigns]);
 
-  // Fetch mobile numbers for applicants
-  const fetchUserPhoneNumbers = useCallback(async (applicants: CampaignApplicantDoc[]) => {
+  const fetchUserDetails = useCallback(async (applicants: CampaignApplicantDoc[]) => {
     try {
-      const newPhoneNumbers: Record<string, string> = {};
+      const newUserDetails: Record<string, {phone?: string, instagramProfile?: string, instagramUsername?: string}> = {};
       const usersToFetch = applicants
-        .filter(applicant =>
-          !applicant.userPhone && // Only fetch if not already available
-          !phoneNumbers[applicant.userId] // And not already cached
+        .filter(applicant => 
+          (!applicant.userPhone && !userDetails[applicant.userId]?.phone) || 
+          (!applicant.instagramProfile && !userDetails[applicant.userId]?.instagramProfile) ||
+          (!applicant.instagramUsername && !userDetails[applicant.userId]?.instagramUsername)
         )
         .map(applicant => applicant.userId);
 
-      // Fetch in parallel
       const fetchPromises = usersToFetch.map(async userId => {
         try {
           const userDoc = await getDoc(doc(db, "users", userId));
@@ -249,7 +240,9 @@ const CampaignsPage = () => {
             const userData = userDoc.data();
             return {
               userId,
-              phone: userData.phoneNumber || userData.mobileNumber || 'No phone provided'
+              phone: userData.phoneNumber || userData.mobileNumber || 'No phone provided',
+              instagramProfile: userData.instagramProfile || userData.instagram || 'Not provided',
+              instagramUsername: userData.instagramUsername || 'Not provided' // Fetch username from user profile
             };
           }
         } catch (error) {
@@ -258,27 +251,27 @@ const CampaignsPage = () => {
         return null;
       });
 
-      // Process results
       const results = await Promise.all(fetchPromises);
       results.forEach(result => {
         if (result) {
-          newPhoneNumbers[result.userId] = result.phone;
+          newUserDetails[result.userId] = {
+            phone: result.phone,
+            instagramProfile: result.instagramProfile,
+            instagramUsername: result.instagramUsername
+          };
         }
       });
 
-      // Update state with new phone numbers
-      if (Object.keys(newPhoneNumbers).length > 0) {
-        setPhoneNumbers(prev => ({ ...prev, ...newPhoneNumbers }));
+      if (Object.keys(newUserDetails).length > 0) {
+        setUserDetails(prev => ({ ...prev, ...newUserDetails }));
       }
     } catch (error) {
-      console.error("Error fetching phone numbers:", error);
+      console.error("Error fetching user details:", error);
     }
-  }, [phoneNumbers]);
+  }, [userDetails]);
 
-  // Open campaign details dialog
   const openCampaignDetails = async (campaign: CampaignWithDetails) => {
     try {
-      // Refresh campaign data before showing details
       const campaignRef = doc(db, "campaigns", campaign.id);
       const docSnap = await getDoc(campaignRef);
 
@@ -286,40 +279,35 @@ const CampaignsPage = () => {
       if (docSnap.exists()) {
         updatedCampaign = {
           ...mapFirestoreDocToCampaign(docSnap) as CampaignWithDetails,
-          applicants: campaign.applicants // Preserve applicants
+          applicants: campaign.applicants // Keep existing applicants from real-time listener
         };
       }
 
-      // Fetch phone numbers for applicants
       if (updatedCampaign.applicants.length > 0) {
-        await fetchUserPhoneNumbers(updatedCampaign.applicants);
+        await fetchUserDetails(updatedCampaign.applicants);
       }
 
       setSelectedCampaign(updatedCampaign);
       setIsDialogOpen(true);
     } catch (error) {
       console.error("Error fetching campaign details:", error);
-      setSelectedCampaign(campaign);
+      setSelectedCampaign(campaign); // Fallback to showing existing data if fetch fails
       setIsDialogOpen(true);
     }
   };
 
-  // Close dialog
   const closeDialog = () => {
     setIsDialogOpen(false);
     setSelectedCampaign(null);
   };
 
-  // Memoized filtered campaigns
   const filteredCampaigns = useMemo(() => {
     let result = campaigns;
 
-    // Apply status filter
     if (statusFilter !== 'all') {
       result = result.filter(campaign => campaign.status === statusFilter);
     }
 
-    // Apply search term filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       result = result.filter(campaign => {
@@ -329,7 +317,9 @@ const CampaignsPage = () => {
         const matchesApplicant = campaign.applicants.some(applicant =>
           (applicant.userName || '').toLowerCase().includes(term) ||
           (applicant.userEmail || '').toLowerCase().includes(term) ||
-          (phoneNumbers[applicant.userId] || '').toLowerCase().includes(term)
+          (userDetails[applicant.userId]?.phone || '').toLowerCase().includes(term) ||
+          (applicant.instagramUsername || userDetails[applicant.userId]?.instagramUsername || '').toLowerCase().includes(term) ||
+          (applicant.instagramProfile || userDetails[applicant.userId]?.instagramProfile || '').toLowerCase().includes(term)
         );
 
         return matchesCampaign || matchesApplicant;
@@ -337,16 +327,14 @@ const CampaignsPage = () => {
     }
 
     return result;
-  }, [campaigns, searchTerm, statusFilter, phoneNumbers]);
+  }, [campaigns, searchTerm, statusFilter, userDetails]);
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredCampaigns.length / CAMPAIGNS_PER_PAGE);
   const paginatedCampaigns = useMemo(() => {
     const startIndex = (currentPage - 1) * CAMPAIGNS_PER_PAGE;
     return filteredCampaigns.slice(startIndex, startIndex + CAMPAIGNS_PER_PAGE);
   }, [filteredCampaigns, currentPage]);
 
-  // Status styling
   const getStatusColor = (status: string) => {
     const statusColors = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -357,19 +345,17 @@ const CampaignsPage = () => {
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
   };
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, searchTerm]);
 
-  // Get phone number for applicant
   const getApplicantPhone = (applicant: CampaignApplicantDoc) => {
-    return applicant.userPhone || phoneNumbers[applicant.userId] || 'No phone provided';
+    return applicant.userPhone || userDetails[applicant.userId]?.phone || 'No phone provided';
   };
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 min-h-[300px]">
+      <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
         <div className="bg-red-100 text-red-800 p-4 rounded-lg max-w-md text-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -389,7 +375,7 @@ const CampaignsPage = () => {
 
   if (loading && !campaigns.length) {
     return (
-      <div className="flex flex-col items-center justify-center p-10 min-h-[300px]">
+      <div className="flex flex-col items-center justify-center p-4 min-h-[300px]">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
         <p className="mt-4 text-gray-600">Loading campaign data...</p>
       </div>
@@ -397,18 +383,18 @@ const CampaignsPage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-2 sm:p-4 pb-20"> {/* Added pb-20 here */}
       {/* Campaign Details Dialog */}
       {isDialogOpen && selectedCampaign && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
           <div
             ref={dialogRef}
-            className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-fade-in"
+            className="bg-white rounded-xl shadow-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-fade-in"
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800">{selectedCampaign.campaignName || 'Untitled Campaign'}</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{selectedCampaign.campaignName || 'Untitled Campaign'}</h2>
                   <p className="text-gray-600">by {selectedCampaign.brandName || 'Unknown Brand'}</p>
                 </div>
                 <button
@@ -420,7 +406,7 @@ const CampaignsPage = () => {
                 </button>
               </div>
 
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-6">
                 {/* Left Column: Campaign & Creator Info */}
                 <div className="space-y-6">
                   <div>
@@ -480,7 +466,9 @@ const CampaignsPage = () => {
                       {selectedCampaign.applicants.map(applicant => (
                         <div key={applicant.id} className="p-3 hover:bg-gray-50 transition-colors">
                           <div className="flex justify-between items-start">
-                            <h4 className="font-semibold text-gray-900 text-sm truncate">{applicant.userName || 'Unknown User'}</h4>
+                            <h4 className="font-semibold text-gray-900 text-sm truncate max-w-[70%]">
+                              {applicant.userName || 'Unknown User'}
+                            </h4>
                             <span className="text-xs text-gray-500 flex-shrink-0 ml-2">{formatDate(applicant.appliedAt)}</span>
                           </div>
                           <div className="mt-2 text-sm text-gray-600 space-y-1.5">
@@ -495,6 +483,23 @@ const CampaignsPage = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                               </svg>
                               <span>{getApplicantPhone(applicant)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Instagram className="h-4 w-4 text-gray-400" /> {/* Instagram Icon */}
+                              <span className="truncate">
+                                {applicant.instagramUsername || applicant.instagramProfile ? (
+                                  <a 
+                                    href={applicant.instagramProfile || `https://instagram.com/${applicant.instagramUsername}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    {applicant.instagramUsername ? `@${applicant.instagramUsername}` : 'Instagram Profile'}
+                                  </a>
+                                ) : (
+                                  'No Instagram Profile'
+                                )}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -513,7 +518,7 @@ const CampaignsPage = () => {
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end space-x-3">
+              <div className="mt-6 flex flex-wrap gap-2 justify-end">
                 <button
                   onClick={() => selectedCampaign && updateCampaignStatus(selectedCampaign.id, 'rejected')}
                   disabled={!selectedCampaign || selectedCampaign.status === 'rejected' || updatingCampaigns[selectedCampaign.id]}
@@ -541,19 +546,19 @@ const CampaignsPage = () => {
       )}
 
       {/* Main Content */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <header className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Campaign Management</h1>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Campaign Management</h1>
           <p className="mt-1 text-gray-600">
             Review campaigns and manage applications in real-time
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-64">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 w-full">
+          <div className="relative">
             <input
               type="text"
-              placeholder="Search campaigns, applicants..."
+              placeholder="Search campaigns, applicants, Instagram..."
               className="w-full rounded-lg border border-gray-200 py-2 px-4 pl-10 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -588,123 +593,228 @@ const CampaignsPage = () => {
         </div>
       </header>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign & Brand</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicants</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {paginatedCampaigns.length > 0 ? (
-              paginatedCampaigns.map((campaign) => (
-                <tr
-                  key={campaign.id}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => openCampaignDetails(campaign)}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap min-w-[200px]">
-                    <div className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
+      {/* Mobile Cards View */}
+      {isMobile ? (
+        <div className="space-y-4">
+          {paginatedCampaigns.length > 0 ? (
+            paginatedCampaigns.map((campaign) => (
+              <div 
+                key={campaign.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 cursor-pointer"
+                onClick={() => openCampaignDetails(campaign)}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 truncate max-w-[200px]">
                       {campaign.campaignName || <span className="text-gray-400 italic">Untitled</span>}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate max-w-[180px]">
+                    </h3>
+                    <p className="text-sm text-gray-500 truncate max-w-[200px]">
                       {campaign.brandName || <span className="text-gray-400 italic">No brand</span>}
-                    </div>
-                  </td>
+                    </p>
+                  </div>
+                  <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(campaign.status)}`}>
+                    {campaign.status}
+                  </span>
+                </div>
 
-                  <td className="px-6 py-4 text-sm text-gray-600 min-w-[180px]">
-                    <div><span className="font-medium">Budget:</span> {formatCurrency(campaign.totalCreatorBudget)}</div>
-                    <div><span className="font-medium">Platform:</span> {campaign.platform || 'N/A'}</div>
-                    <div><span className="font-medium">Deadline:</span> {formatDate(campaign.deadline)}</div>
-                  </td>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-gray-500">Budget</p>
+                    <p className="font-medium">{formatCurrency(campaign.totalCreatorBudget)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Platform</p>
+                    <p className="font-medium">{campaign.platform || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Deadline</p>
+                    <p className="font-medium">{formatDate(campaign.deadline)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Applicants</p>
+                    <p className="font-medium">{campaign.applicants.length}</p>
+                  </div>
+                </div>
 
-                  <td className="px-6 py-4 min-w-[200px]">
-                    {campaign.applicants.length > 0 ? (
-                      <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
-                        {campaign.applicants.map(applicant => (
-                          <div key={applicant.id} className="text-sm">
-                            <div className="font-medium text-gray-800 truncate max-w-[160px]">{applicant.userName || 'Unknown User'}</div>
-                            <div className="text-xs text-gray-500 truncate max-w-[160px]">{applicant.userEmail || 'No Email'}</div>
-                            <div className="text-xs text-gray-500 truncate max-w-[160px] flex items-center">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                              </svg>
-                              {phoneNumbers[applicant.userId] || 'Fetching...'}
-                            </div>
-                          </div>
-                        ))}
+                <div className="mt-4 flex justify-between" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => updateCampaignStatus(campaign.id, 'approved')}
+                    disabled={campaign.status === 'approved' || updatingCampaigns[campaign.id]}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors w-[48%] disabled:opacity-50 disabled:cursor-not-allowed ${
+                      campaign.status === 'approved'
+                        ? 'bg-green-200 text-green-800'
+                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                    }`}
+                  >
+                    {updatingCampaigns[campaign.id] && campaign.status !== 'approved' ? (
+                      <span className="flex items-center justify-center">
+                        <span className="animate-spin rounded-full h-3 w-3 border-b-1 border-current mr-1"></span>
+                        ...
+                      </span>
+                    ) : 'Approve'}
+                  </button>
+
+                  <button
+                    onClick={() => updateCampaignStatus(campaign.id, 'rejected')}
+                    disabled={campaign.status === 'rejected' || updatingCampaigns[campaign.id]}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors w-[48%] disabled:opacity-50 disabled:cursor-not-allowed ${
+                      campaign.status === 'rejected'
+                        ? 'bg-red-200 text-red-800'
+                        : 'bg-red-100 text-red-800 hover:bg-red-200'
+                    }`}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="bg-white rounded-xl p-6 text-center">
+              <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <p className="text-lg font-medium text-gray-900">No matching campaigns found</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Try adjusting your search or filters
+              </p>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Desktop Table View */
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign & Brand</th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applicants</th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {paginatedCampaigns.length > 0 ? (
+                paginatedCampaigns.map((campaign) => (
+                  <tr
+                    key={campaign.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => openCampaignDetails(campaign)}
+                  >
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap min-w-[200px]">
+                      <div className="text-sm font-semibold text-gray-900 truncate max-w-[180px]">
+                        {campaign.campaignName || <span className="text-gray-400 italic">Untitled</span>}
                       </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 italic">No applicants</div>
-                    )}
-                  </td>
+                      <div className="text-xs text-gray-500 truncate max-w-[180px]">
+                        {campaign.brandName || <span className="text-gray-400 italic">No brand</span>}
+                      </div>
+                    </td>
 
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(campaign.status)}`}>
-                      {campaign.status}
-                    </span>
-                  </td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-gray-600 min-w-[180px]">
+                      <div><span className="font-medium">Budget:</span> {formatCurrency(campaign.totalCreatorBudget)}</div>
+                      <div><span className="font-medium">Platform:</span> {campaign.platform || 'N/A'}</div>
+                      <div><span className="font-medium">Deadline:</span> {formatDate(campaign.deadline)}</div>
+                    </td>
 
-                  <td className="px-6 py-4 whitespace-nowrap min-w-[120px]" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col space-y-2">
-                      <button
-                        onClick={() => updateCampaignStatus(campaign.id, 'approved')}
-                        disabled={campaign.status === 'approved' || updatingCampaigns[campaign.id]}
-                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors w-full text-center disabled:opacity-50 disabled:cursor-not-allowed ${campaign.status === 'approved'
-                            ? 'bg-green-200 text-green-800'
-                            : 'bg-green-100 text-green-800 hover:bg-green-200'
-                          }`}
-                        aria-label={`Approve ${campaign.campaignName}`}
-                      >
-                        {updatingCampaigns[campaign.id] && campaign.status !== 'approved' ? (
-                          <span className="flex items-center justify-center">
-                            <span className="animate-spin rounded-full h-3 w-3 border-b-1 border-current mr-1"></span>
-                            ...
-                          </span>
-                        ) : 'Approve'}
-                      </button>
+                    <td className="px-4 sm:px-6 py-4 min-w-[200px]">
+                      {campaign.applicants.length > 0 ? (
+                        <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
+                          {campaign.applicants.map(applicant => (
+                            <div key={applicant.id} className="text-sm">
+                              <div className="font-medium text-gray-800 truncate max-w-[160px]">{applicant.userName || 'Unknown User'}</div>
+                              <div className="text-xs text-gray-500 truncate max-w-[160px]">{applicant.userEmail || 'No Email'}</div>
+                              <div className="text-xs text-gray-500 truncate max-w-[160px] flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                {userDetails[applicant.userId]?.phone || 'Fetching...'}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate max-w-[160px] flex items-center">
+                                <Instagram className="h-3 w-3 mr-1 text-gray-400" /> {/* Instagram Icon */}
+                                {applicant.instagramUsername || applicant.instagramProfile ? (
+                                  <a 
+                                    href={applicant.instagramProfile || `https://instagram.com/${applicant.instagramUsername}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    {applicant.instagramUsername ? `@${applicant.instagramUsername}` : 'Instagram Profile'}
+                                  </a>
+                                ) : (
+                                  'No Instagram'
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 italic">No applicants</div>
+                      )}
+                    </td>
 
-                      <button
-                        onClick={() => updateCampaignStatus(campaign.id, 'rejected')}
-                        disabled={campaign.status === 'rejected' || updatingCampaigns[campaign.id]}
-                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors w-full text-center disabled:opacity-50 disabled:cursor-not-allowed ${campaign.status === 'rejected'
-                            ? 'bg-red-200 text-red-800'
-                            : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
-                        aria-label={`Reject ${campaign.campaignName}`}
-                      >
-                        Reject
-                      </button>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(campaign.status)}`}>
+                        {campaign.status}
+                      </span>
+                    </td>
+
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap min-w-[120px]" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col space-y-2">
+                        <button
+                          onClick={() => updateCampaignStatus(campaign.id, 'approved')}
+                          disabled={campaign.status === 'approved' || updatingCampaigns[campaign.id]}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-colors w-full text-center disabled:opacity-50 disabled:cursor-not-allowed ${campaign.status === 'approved'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-green-100 text-green-800 hover:bg-green-200'
+                            }`}
+                          aria-label={`Approve ${campaign.campaignName}`}
+                        >
+                          {updatingCampaigns[campaign.id] && campaign.status !== 'approved' ? (
+                            <span className="flex items-center justify-center">
+                              <span className="animate-spin rounded-full h-3 w-3 border-b-1 border-current mr-1"></span>
+                              ...
+                            </span>
+                          ) : 'Approve'}
+                        </button>
+
+                        <button
+                          onClick={() => updateCampaignStatus(campaign.id, 'rejected')}
+                          disabled={campaign.status === 'rejected' || updatingCampaigns[campaign.id]}
+                          className={`px-3 py-1 rounded-md text-xs font-medium transition-colors w-full text-center disabled:opacity-50 disabled:cursor-not-allowed ${campaign.status === 'rejected'
+                              ? 'bg-red-200 text-red-800'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                            }`}
+                          aria-label={`Reject ${campaign.campaignName}`}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center">
+                    <div className="flex flex-col items-center justify-center text-gray-500">
+                      <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <p className="text-lg font-medium">No matching campaigns found</p>
+                      <p className="mt-1 text-sm max-w-md">
+                        Try adjusting your search or filters
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={5} className="px-6 py-10 text-center">
-                  <div className="flex flex-col items-center justify-center text-gray-500">
-                    <svg className="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <p className="text-lg font-medium">No matching campaigns found</p>
-                    <p className="mt-1 text-sm max-w-md">
-                      Try adjusting your search or filters
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-6 bg-white rounded-lg border border-gray-200">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-4 sm:px-6 bg-white rounded-lg border border-gray-200">
           <div className="text-sm text-gray-700">
             Showing <span className="font-medium">{(currentPage - 1) * CAMPAIGNS_PER_PAGE + 1}</span> to{' '}
             <span className="font-medium">
@@ -723,7 +833,7 @@ const CampaignsPage = () => {
               Previous
             </button>
 
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 min-w-[100px] text-center">
               Page {currentPage} of {totalPages}
             </span>
 

@@ -17,13 +17,14 @@ const AdminLayout = ({ children }: AdminLayoutProps) => {
     { name: 'Applications', href: '/admin/applications' },
     { name: 'Campaigns', href: '/admin/campaigns' },
     { name: 'Clients', href: '/admin/clients' },
+    // --- ADD THIS NEW ITEM ---
+    { name: 'Messages', href: '/admin/messages' },
   ];
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 font-sans">
 
       {/* Tab Navigation - Always Visible */}
-      {/* The 'top-16' class was replaced with 'top-0' to remove the empty space */}
       <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-1 sm:px-2 lg:px-4">
           {/* Horizontal Scroll Container */}

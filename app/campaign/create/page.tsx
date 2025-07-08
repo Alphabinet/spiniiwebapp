@@ -1,5 +1,3 @@
-// file: app/campaign/create/page.tsx
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -9,7 +7,6 @@ import {
     ArrowLeft,
     Lock,
     Users,
-    // DollarSign, // Removed unused import
     Calendar,
     BarChart2,
     FileText,
@@ -41,6 +38,8 @@ import { db, auth } from '@/lib/firebaseConfig';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { addDoc, collection } from 'firebase/firestore';
 import { toast } from 'sonner';
+import { cn } from "@/lib/utils"; // Import cn for conditional classnames
+
 
 // --- Constants for Pricing ---
 const BUDGET_INCREMENTS = [100, 200, 500, 1000, 2000];
@@ -68,7 +67,7 @@ interface CampaignFormData {
     numberOfCreators: number;
     totalCreatorBudget: number | '';
     minimumFollowers: number | '';
-    averageViews: number | '';
+    averageViews: number | ''; // This field is not used in the form, but kept in interface
     minAge: number | '';
     maxAge: number | '';
     gender: 'Male' | 'Female' | 'Any' | '';
@@ -129,12 +128,23 @@ const INSTAGRAM_RATE_CARD: RateCardEntry[] = [
 
 const steps = [
     { name: 'Campaign Details', icon: FileText, fields: ['campaignName', 'platform'] },
-    { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'totalCreatorBudget'] },
+    { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'services'] }, // Added 'services' for validation
     { name: 'Target Audience', icon: BarChart2, fields: ['minAge', 'maxAge', 'gender', 'location'] },
     { name: 'Content & Deadline', icon: Calendar, fields: ['categories', 'campaignDescription', 'deadline'] },
     { name: 'Owner Details', icon: User, fields: ['ownerFullName', 'contactNumber', 'ownerEmailAddress', 'ownerCity', 'ownerDistrict', 'ownerState', 'ownerCountry'] },
     { name: 'Summary & Payment', icon: CreditCard, fields: [] },
     { name: 'Confirmation', icon: CheckCircle, fields: [] },
+];
+
+// --- New and Expanded Categories Array ---
+const ALL_CATEGORIES = [
+    'Fashion', 'Beauty', 'Lifestyle', 'Fitness', 'Travel', 'Food', 'Technology',
+    'Gaming', 'Comedy', 'Motivation', 'Music', 'Dance', 'Photography', 'Art',
+    'DIY (Do It Yourself)', 'Education', 'Finance', 'Health & Wellness', 'Parenting',
+    'Pets', 'Cars & Automobiles', "Men's Grooming", 'Home Decor', 'Spirituality',
+    'Acting', 'Reviews & Unboxing', 'Astrology', 'Modeling', 'Vlogger',
+    'Books & Reading', 'Makeup', 'Nails & Nail Art', 'Skincare',
+    'Saree & Ethnic Wear', 'Luxury Lifestyle', 'Entertainment'
 ];
 
 const CampaignCreationPage = () => {
@@ -155,6 +165,8 @@ const CampaignCreationPage = () => {
     const [paymentStatus, setPaymentStatus] = useState<'success' | 'failed' | null>(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [isClient, setIsClient] = useState(false);
+    // State to hold validation errors
+    const [errors, setErrors] = useState<Partial<Record<keyof CampaignFormData | 'services', string>>>({});
 
     useEffect(() => { setIsClient(true); }, []);
 
@@ -188,7 +200,7 @@ const CampaignCreationPage = () => {
 
     const estimatedMinimumBudget = useMemo(() => {
         const followers = Number(formData.minimumFollowers);
-        if (!followers) return 0;
+        if (!followers || isNaN(followers)) return 0; // Handle NaN for initial empty string
 
         const reelCost = formData.services.reel * getMinimumBudgetForService(followers, 'reel');
         const storyCost = formData.services.story * getMinimumBudgetForService(followers, 'story');
@@ -208,29 +220,45 @@ const CampaignCreationPage = () => {
         const { name, value, type } = e.target;
         const isNumeric = type === 'number';
         setFormData({ ...formData, [name]: isNumeric ? (value === '' ? '' : Number(value)) : value });
+        // Clear error for the current field when user starts typing
+        setErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
     const handleSelectChange = (name: keyof Omit<CampaignFormData, 'services'>, value: string) => {
-        setFormData({ ...formData, [name]: value });
+        setFormData({ ...formData, [name]: value as any }); // Type assertion for flexibility
+        // Clear error for the current field
+        setErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
     const handleCategoryChange = (category: string) => {
-        setFormData((prev) => ({
-            ...prev,
-            categories: prev.categories.includes(category)
+        setFormData((prev) => {
+            const newCategories = prev.categories.includes(category)
                 ? prev.categories.filter((c) => c !== category)
-                : [...prev.categories, category],
-        }));
+                : [...prev.categories, category];
+            // Clear error for categories if at least one is selected
+            if (newCategories.length > 0) {
+                setErrors(prevErrors => ({ ...prevErrors, categories: undefined }));
+            }
+            return { ...prev, categories: newCategories };
+        });
     };
 
     const handleCountChange = (field: 'reel' | 'story' | 'reelAndStory' | 'numberOfCreators', change: 1 | -1) => {
         setFormData(prev => {
+            let newFormData = { ...prev };
             if (field === 'numberOfCreators') {
-                return { ...prev, numberOfCreators: Math.max(1, prev.numberOfCreators + change) };
+                newFormData = { ...prev, numberOfCreators: Math.max(1, prev.numberOfCreators + change) };
+            } else {
+                const currentCount = prev.services[field];
+                const newCount = Math.max(0, currentCount + change);
+                newFormData = { ...prev, services: { ...prev.services, [field]: newCount } };
             }
-            const currentCount = prev.services[field];
-            const newCount = Math.max(0, currentCount + change);
-            return { ...prev, services: { ...prev.services, [field]: newCount } };
+            // Clear 'services' error if any service count becomes greater than 0
+            const totalServices = Object.values(newFormData.services).reduce((sum, count) => sum + count, 0);
+            if (totalServices > 0) {
+                setErrors(prevErrors => ({ ...prevErrors, services: undefined }));
+            }
+            return newFormData;
         });
     };
 
@@ -241,58 +269,87 @@ const CampaignCreationPage = () => {
         }));
     };
 
-    const validateStep = () => {
+    const validateStep = (): boolean => {
         const currentFields = steps[currentStep].fields;
+        let newErrors: Partial<Record<keyof CampaignFormData | 'services', string>> = {};
+        let isValid = true;
+
         for (const field of currentFields) {
             const value = formData[field as keyof CampaignFormData];
-            if (Array.isArray(value) ? value.length === 0 : !value && value !== 0) {
-                toast.error(`Please fill in all required fields for ${steps[currentStep].name}.`);
-                return false;
+
+            if (field === 'services') { // Special handling for services object
+                const totalServices = Object.values(formData.services).reduce((sum, count) => sum + count, 0);
+                if (totalServices === 0) {
+                    newErrors.services = 'Please select at least one service.';
+                    isValid = false;
+                }
+            } else if (field === 'categories') { // Special handling for categories array
+                if (Array.isArray(value) && value.length === 0) {
+                    newErrors.categories = 'Please select at least one category.';
+                    isValid = false;
+                }
+            } else if (!value && value !== 0) { // General check for empty values (excluding 0 for numbers)
+                newErrors[field as keyof CampaignFormData] = 'This field is required.';
+                isValid = false;
             }
         }
 
+        // Step-specific validations
         switch (currentStep) {
-            case 1:
-                const totalServices = Object.values(formData.services).reduce((sum, count) => sum + count, 0);
-                if (totalServices === 0) {
-                    toast.error('Please select at least one service.');
-                    return false;
+            case 1: // Services & Budget
+                if (Number(formData.minimumFollowers) < 1000) {
+                    newErrors.minimumFollowers = 'Minimum followers must be at least 1,000.';
+                    isValid = false;
                 }
                 break;
-            case 2:
+            case 2: // Target Audience
                 if (Number(formData.minAge) > Number(formData.maxAge)) {
-                    toast.error('Minimum age cannot be greater than maximum age.');
-                    return false;
+                    newErrors.minAge = 'Min age cannot be greater than max age.';
+                    newErrors.maxAge = 'Max age cannot be less than min age.';
+                    isValid = false;
                 }
                 if (Number(formData.minAge) < 13) {
-                    toast.error('Minimum age must be at least 13.');
-                    return false;
+                    newErrors.minAge = 'Minimum age must be at least 13.';
+                    isValid = false;
                 }
                 break;
-            case 3:
-                if (new Date(formData.deadline) < new Date()) {
-                    toast.error('Deadline cannot be in the past.');
-                    return false;
+            case 3: // Content & Deadline
+                if (formData.deadline && new Date(formData.deadline) < new Date()) {
+                    newErrors.deadline = 'Deadline cannot be in the past.';
+                    isValid = false;
                 }
                 break;
-            case 4:
+            case 4: // Owner Details
                 const phoneRegex = /^\+?\d{10,15}$/;
-                if (!phoneRegex.test(formData.contactNumber)) {
-                    toast.error('Please enter a valid Contact Number (10-15 digits).');
-                    return false;
+                if (formData.contactNumber && !phoneRegex.test(formData.contactNumber)) {
+                    newErrors.contactNumber = 'Please enter a valid Contact Number (10-15 digits).';
+                    isValid = false;
                 }
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(formData.ownerEmailAddress)) {
-                    toast.error('Please enter a valid Email Address.');
-                    return false;
+                if (formData.ownerEmailAddress && !emailRegex.test(formData.ownerEmailAddress)) {
+                    newErrors.ownerEmailAddress = 'Please enter a valid Email Address.';
+                    isValid = false;
                 }
                 break;
         }
-        return true;
+
+        setErrors(newErrors); // Update the error state
+        if (!isValid) {
+            toast.error('Please correct the highlighted errors before proceeding.');
+        }
+        return isValid;
     };
 
-    const nextStep = () => { if (validateStep()) setCurrentStep(currentStep + 1); };
-    const prevStep = () => setCurrentStep(currentStep - 1);
+    const nextStep = () => {
+        if (validateStep()) {
+            setCurrentStep(currentStep + 1);
+            setErrors({}); // Clear errors when moving to the next step
+        }
+    };
+    const prevStep = () => {
+        setCurrentStep(currentStep - 1);
+        setErrors({}); // Clear errors when moving back
+    };
 
     const getServiceFee = (creators: number): number => {
         if (creators <= 0) return 0;
@@ -333,7 +390,7 @@ const CampaignCreationPage = () => {
 
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                amount: Math.round(totalAmount * 100),
+                amount: Math.round(totalAmount * 100), // Razorpay expects amount in paisa
                 currency: 'INR',
                 name: 'Snaapii Campaign',
                 description: `Payment for ${formData.campaignName}`,
@@ -361,7 +418,7 @@ const CampaignCreationPage = () => {
                     }
                 },
                 prefill: { name: formData.ownerFullName, email: formData.ownerEmailAddress, contact: formData.contactNumber },
-                theme: { color: '#2563EB' },
+                theme: { color: '#8B5CF6' }, // Purple shade for Razorpay theme
             };
             // @ts-expect-error Razorpay is loaded dynamically
             const rzp1 = new window.Razorpay(options);
@@ -386,19 +443,31 @@ const CampaignCreationPage = () => {
             case 0:
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 1: Campaign Details</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 1: Campaign Details</h2>
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="campaignName" className="font-semibold text-gray-700">Campaign Name</Label>
-                                <Input id="campaignName" name="campaignName" value={formData.campaignName} onChange={handleInputChange} placeholder="e.g., Summer Collection Launch" className="mt-1" />
+                                <Input
+                                    id="campaignName"
+                                    name="campaignName"
+                                    value={formData.campaignName}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., Summer Collection Launch"
+                                    className={cn("mt-1", errors.campaignName && 'border-red-500')}
+                                />
+                                {errors.campaignName && <p className="text-red-500 text-sm mt-1">{errors.campaignName}</p>}
                             </div>
                             <div>
                                 <Label className="font-semibold text-gray-700">Platform</Label>
-                                <RadioGroup value={formData.platform} onValueChange={(v) => handleSelectChange('platform', v)} className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+                                <RadioGroup
+                                    value={formData.platform}
+                                    onValueChange={(v) => handleSelectChange('platform', v)}
+                                    className={cn(`grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2`, errors.platform && 'border border-red-500 p-2 rounded-lg')}
+                                >
                                     {(['Instagram', 'Youtube', 'Facebook'] as const).map(p => {
                                         const Icon = { Instagram, Youtube, Facebook }[p];
                                         return (
-                                            <Label key={p} className={`flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all ${formData.platform === p ? 'border-blue-600 bg-blue-50 shadow-md' : 'border-gray-300 hover:border-blue-400'}`}>
+                                            <Label key={p} className={`flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all ${formData.platform === p ? 'border-purple-600 bg-purple-50 shadow-md' : 'border-gray-300 hover:border-purple-400'}`}>
                                                 <RadioGroupItem value={p} className="sr-only" />
                                                 <Icon className={`h-6 w-6 ${p === 'Instagram' ? 'text-pink-600' : p === 'Youtube' ? 'text-red-600' : 'text-blue-800'}`} />
                                                 <span className="font-medium">{p}</span>
@@ -406,6 +475,7 @@ const CampaignCreationPage = () => {
                                         )
                                     })}
                                 </RadioGroup>
+                                {errors.platform && <p className="text-red-500 text-sm mt-1">{errors.platform}</p>}
                             </div>
                         </div>
                     </>
@@ -413,17 +483,27 @@ const CampaignCreationPage = () => {
             case 1:
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 2: Services & Budget</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 2: Services & Budget</h2>
+                        <div className="flex flex-col md:flex-row gap-6">
                             {/* Left Column */}
-                            <div className="space-y-6">
+                            <div className="space-y-6 w-full">
                                 <div>
                                     <Label htmlFor="minimumFollowers" className="font-semibold text-gray-700">Minimum Followers</Label>
-                                    <Input id="minimumFollowers" name="minimumFollowers" type="number" min="1000" value={formData.minimumFollowers} onChange={handleInputChange} placeholder="e.g., 10000" className="mt-1" />
+                                    <Input
+                                        id="minimumFollowers"
+                                        name="minimumFollowers"
+                                        type="number"
+                                        min="1000"
+                                        value={formData.minimumFollowers}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., 10000"
+                                        className={cn("mt-1", errors.minimumFollowers && 'border-red-500')}
+                                    />
+                                    {errors.minimumFollowers && <p className="text-red-500 text-sm mt-1">{errors.minimumFollowers}</p>}
                                 </div>
                                 <div className="space-y-3">
                                     <Label className="font-semibold text-gray-700">Select Services</Label>
-                                    <div className="p-4 border rounded-lg space-y-4 bg-gray-50">
+                                    <div className={cn(`p-4 border rounded-lg space-y-4 bg-gray-50`, errors.services && 'border-red-500')}>
                                         {(['reel', 'story', 'reelAndStory'] as const).map(serviceKey => (
                                             <div key={serviceKey} className="flex items-center justify-between">
                                                 <p className="font-medium text-gray-800">{{ reel: 'Reels', story: 'Story', reelAndStory: 'Reels + Story' }[serviceKey]}</p>
@@ -435,10 +515,11 @@ const CampaignCreationPage = () => {
                                             </div>
                                         ))}
                                     </div>
+                                    {errors.services && <p className="text-red-500 text-sm mt-1">{errors.services}</p>}
                                 </div>
                             </div>
                             {/* Right Column */}
-                            <div className="space-y-6">
+                            <div className="space-y-6 w-full">
                                 <div className="space-y-3">
                                     <Label className="font-semibold text-gray-700">Number of Creators</Label>
                                     <div className="flex items-center gap-3 p-4 border rounded-lg bg-gray-50 justify-center">
@@ -447,16 +528,23 @@ const CampaignCreationPage = () => {
                                         <Button size="icon" variant="outline" className="rounded-full h-8 w-8" onClick={() => handleCountChange('numberOfCreators', 1)}><Plus className="h-4 w-4" /></Button>
                                     </div>
                                 </div>
-                                <div className="p-4 border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg text-center">
-                                    <p className="text-sm font-semibold text-blue-800">Estimated Minimum Budget</p>
-                                    <p className="text-3xl font-extrabold text-blue-900 mt-1">₹{estimatedMinimumBudget.toLocaleString('en-IN')}</p>
+                                <div className="p-4 border-2 border-dashed border-purple-300 bg-purple-50 rounded-lg text-center">
+                                    <p className="text-sm font-semibold text-purple-800">Estimated Minimum Budget</p>
+                                    <p className="text-2xl sm:text-3xl font-extrabold text-purple-900 mt-1">₹{estimatedMinimumBudget.toLocaleString('en-IN')}</p>
                                 </div>
                                 <div>
                                     <Label htmlFor="totalCreatorBudget" className="font-semibold text-gray-700">Total Creator Budget (₹)</Label>
-                                    <Input id="totalCreatorBudget" name="totalCreatorBudget" type="text" value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`} readOnly className="mt-1 text-lg font-bold bg-white" />
+                                    <Input
+                                        id="totalCreatorBudget"
+                                        name="totalCreatorBudget"
+                                        type="text"
+                                        value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`}
+                                        readOnly
+                                        className="mt-1 text-lg font-bold bg-white"
+                                    />
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {BUDGET_INCREMENTS.map(inc => (
-                                            <Button key={inc} variant="outline" size="sm" onClick={() => handleBudgetIncrement(inc)}>
+                                            <Button key={inc} variant="outline" size="sm" onClick={() => handleBudgetIncrement(inc)} className="text-xs">
                                                 + ₹{inc.toLocaleString('en-IN')}
                                             </Button>
                                         ))}
@@ -469,63 +557,122 @@ const CampaignCreationPage = () => {
             case 2:
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 3: Target Audience</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 3: Target Audience</h2>
                         <div className="space-y-4">
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <div className="flex-1">
+                                <div className="w-full sm:w-1/2">
                                     <Label htmlFor="minAge" className="font-semibold text-gray-700">Minimum Age</Label>
-                                    <Input id="minAge" name="minAge" type="number" min="13" value={formData.minAge} onChange={handleInputChange} placeholder="e.g., 18" className="mt-1" />
+                                    <Input
+                                        id="minAge"
+                                        name="minAge"
+                                        type="number"
+                                        min="13"
+                                        value={formData.minAge}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., 18"
+                                        className={cn("mt-1", errors.minAge && 'border-red-500')}
+                                    />
+                                    {errors.minAge && <p className="text-red-500 text-sm mt-1">{errors.minAge}</p>}
                                 </div>
-                                <div className="flex-1">
+                                <div className="w-full sm:w-1/2">
                                     <Label htmlFor="maxAge" className="font-semibold text-gray-700">Maximum Age</Label>
-                                    <Input id="maxAge" name="maxAge" type="number" min="13" value={formData.maxAge} onChange={handleInputChange} placeholder="e.g., 35" className="mt-1" />
+                                    <Input
+                                        id="maxAge"
+                                        name="maxAge"
+                                        type="number"
+                                        min="13"
+                                        value={formData.maxAge}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., 35"
+                                        className={cn("mt-1", errors.maxAge && 'border-red-500')}
+                                    />
+                                    {errors.maxAge && <p className="text-red-500 text-sm mt-1">{errors.maxAge}</p>}
                                 </div>
                             </div>
                             <div>
                                 <Label htmlFor="gender" className="font-semibold text-gray-700">Gender</Label>
                                 <Select onValueChange={(value) => handleSelectChange('gender', value)} value={formData.gender}>
-                                    <SelectTrigger className="w-full mt-1"><SelectValue placeholder="Select target gender" /></SelectTrigger>
+                                    <SelectTrigger className={cn("w-full mt-1", errors.gender && 'border-red-500')}><SelectValue placeholder="Select target gender" /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="Any">Any</SelectItem>
                                         <SelectItem value="Male">Male</SelectItem>
                                         <SelectItem value="Female">Female</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                {errors.gender && <p className="text-red-500 text-sm mt-1">{errors.gender}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="location" className="font-semibold text-gray-700">Location (City, State)</Label>
-                                <Input id="location" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g., Mumbai, Maharashtra" className="mt-1" />
+                                <Input
+                                    id="location"
+                                    name="location"
+                                    value={formData.location}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., Mumbai, Maharashtra"
+                                    className={cn("mt-1", errors.location && 'border-red-500')}
+                                />
+                                {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location}</p>}
                             </div>
                         </div>
                     </>
                 );
             case 3:
-                const categories = ['Fashion', 'Beauty', 'Food', 'Travel', 'Gaming', 'Technology', 'Fitness', 'Lifestyle', 'Education', 'Finance'];
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 4: Content & Deadline</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 4: Content & Deadline</h2>
                         <div className="space-y-4">
                             <div>
                                 <Label className="font-semibold text-gray-700">Categories</Label>
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {categories.map((category) => (
-                                        <Button key={category} onClick={() => handleCategoryChange(category)} variant={formData.categories.includes(category) ? 'default' : 'outline'} className="rounded-full">
+                                <div className={cn(`flex flex-wrap gap-2 mt-2`, errors.categories && 'border border-red-500 p-2 rounded-lg')}>
+                                    {ALL_CATEGORIES.map((category) => ( // Use ALL_CATEGORIES here
+                                        <Button
+                                            key={category}
+                                            onClick={() => handleCategoryChange(category)}
+                                            variant={formData.categories.includes(category) ? 'default' : 'outline'}
+                                            className={cn("rounded-full text-xs sm:text-sm py-1 px-3",
+                                                formData.categories.includes(category) ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'border-gray-300 hover:bg-gray-100'
+                                            )}
+                                        >
                                             {category}
                                         </Button>
                                     ))}
                                 </div>
+                                {errors.categories && <p className="text-red-500 text-sm mt-1">{errors.categories}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="campaignDescription" className="font-semibold text-gray-700">Campaign Description</Label>
-                                <Textarea id="campaignDescription" name="campaignDescription" value={formData.campaignDescription} onChange={handleInputChange} placeholder="Describe your campaign goals and requirements..." className="mt-1 min-h-[120px]" />
+                                <Textarea
+                                    id="campaignDescription"
+                                    name="campaignDescription"
+                                    value={formData.campaignDescription}
+                                    onChange={handleInputChange}
+                                    placeholder="Describe your campaign goals and requirements..."
+                                    className={cn("mt-1 min-h-[120px]", errors.campaignDescription && 'border-red-500')}
+                                />
+                                {errors.campaignDescription && <p className="text-red-500 text-sm mt-1">{errors.campaignDescription}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="deadline" className="font-semibold text-gray-700">Deadline</Label>
-                                <Input id="deadline" name="deadline" type="date" value={formData.deadline} onChange={handleInputChange} className="mt-1" />
+                                <Input
+                                    id="deadline"
+                                    name="deadline"
+                                    type="date"
+                                    value={formData.deadline}
+                                    onChange={handleInputChange}
+                                    className={cn("mt-1", errors.deadline && 'border-red-500')}
+                                />
+                                {errors.deadline && <p className="text-red-500 text-sm mt-1">{errors.deadline}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="demoVideoUrl" className="font-semibold text-gray-700">Demo Video URL (Optional)</Label>
-                                <Input id="demoVideoUrl" name="demoVideoUrl" value={formData.demoVideoUrl} onChange={handleInputChange} placeholder="Link to a demo video (e.g., YouTube)" className="mt-1" />
+                                <Input
+                                    id="demoVideoUrl"
+                                    name="demoVideoUrl"
+                                    value={formData.demoVideoUrl}
+                                    onChange={handleInputChange}
+                                    placeholder="Link to a demo video (e.g., YouTube)"
+                                    className="mt-1"
+                                />
                             </div>
                         </div>
                     </>
@@ -533,46 +680,119 @@ const CampaignCreationPage = () => {
             case 4:
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-6">Step 5: Campaign Owner Details</h2>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 5: Campaign Owner Details</h2>
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="ownerFullName" className="font-semibold text-gray-700">Official Full Name</Label>
-                                <Input id="ownerFullName" name="ownerFullName" value={formData.ownerFullName} onChange={handleInputChange} placeholder="Your full name" className="mt-1" />
+                                <Input
+                                    id="ownerFullName"
+                                    name="ownerFullName"
+                                    value={formData.ownerFullName}
+                                    onChange={handleInputChange}
+                                    placeholder="Your full name"
+                                    className={cn("mt-1", errors.ownerFullName && 'border-red-500')}
+                                />
+                                {errors.ownerFullName && <p className="text-red-500 text-sm mt-1">{errors.ownerFullName}</p>}
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <Label htmlFor="contactNumber" className="font-semibold text-gray-700">Contact Number</Label>
-                                    <Input id="contactNumber" name="contactNumber" type="tel" value={formData.contactNumber} onChange={handleInputChange} placeholder="+91 9876543210" className="mt-1" />
+                                    <Input
+                                        id="contactNumber"
+                                        name="contactNumber"
+                                        type="tel"
+                                        value={formData.contactNumber}
+                                        onChange={handleInputChange}
+                                        placeholder="+91 9876543210"
+                                        className={cn("mt-1", errors.contactNumber && 'border-red-500')}
+                                    />
+                                    {errors.contactNumber && <p className="text-red-500 text-sm mt-1">{errors.contactNumber}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="whatsappContactNumber" className="font-semibold text-gray-700">WhatsApp Number (Optional)</Label>
-                                    <Input id="whatsappContactNumber" name="whatsappContactNumber" type="tel" value={formData.whatsappContactNumber} onChange={handleInputChange} placeholder="If different from contact no." className="mt-1" />
+                                    <Input
+                                        id="whatsappContactNumber"
+                                        name="whatsappContactNumber"
+                                        type="tel"
+                                        value={formData.whatsappContactNumber}
+                                        onChange={handleInputChange}
+                                        placeholder="If different from contact no."
+                                        className="mt-1"
+                                    />
                                 </div>
                             </div>
                             <div>
                                 <Label htmlFor="ownerEmailAddress" className="font-semibold text-gray-700">Email Address</Label>
-                                <Input id="ownerEmailAddress" name="ownerEmailAddress" type="email" value={formData.ownerEmailAddress} onChange={handleInputChange} placeholder="your.email@example.com" className="mt-1" />
+                                <Input
+                                    id="ownerEmailAddress"
+                                    name="ownerEmailAddress"
+                                    type="email"
+                                    value={formData.ownerEmailAddress}
+                                    onChange={handleInputChange}
+                                    placeholder="your.email@example.com"
+                                    className={cn("mt-1", errors.ownerEmailAddress && 'border-red-500')}
+                                />
+                                {errors.ownerEmailAddress && <p className="text-red-500 text-sm mt-1">{errors.ownerEmailAddress}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="brandName" className="font-semibold text-gray-700">Brand Name (Optional)</Label>
-                                <Input id="brandName" name="brandName" value={formData.brandName} onChange={handleInputChange} placeholder="e.g., My Awesome Brand" className="mt-1" />
+                                <Input
+                                    id="brandName"
+                                    name="brandName"
+                                    value={formData.brandName}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., My Awesome Brand"
+                                    className="mt-1"
+                                />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <Label htmlFor="ownerCity" className="font-semibold text-gray-700">City</Label>
-                                    <Input id="ownerCity" name="ownerCity" value={formData.ownerCity} onChange={handleInputChange} placeholder="e.g., Bangalore" className="mt-1" />
+                                    <Input
+                                        id="ownerCity"
+                                        name="ownerCity"
+                                        value={formData.ownerCity}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., Bangalore"
+                                        className={cn("mt-1", errors.ownerCity && 'border-red-500')}
+                                    />
+                                    {errors.ownerCity && <p className="text-red-500 text-sm mt-1">{errors.ownerCity}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerDistrict" className="font-semibold text-gray-700">District</Label>
-                                    <Input id="ownerDistrict" name="ownerDistrict" value={formData.ownerDistrict} onChange={handleInputChange} placeholder="e.g., Bangalore Urban" className="mt-1" />
+                                    <Input
+                                        id="ownerDistrict"
+                                        name="ownerDistrict"
+                                        value={formData.ownerDistrict}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., Bangalore Urban"
+                                        className={cn("mt-1", errors.ownerDistrict && 'border-red-500')}
+                                    />
+                                    {errors.ownerDistrict && <p className="text-red-500 text-sm mt-1">{errors.ownerDistrict}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerState" className="font-semibold text-gray-700">State</Label>
-                                    <Input id="ownerState" name="ownerState" value={formData.ownerState} onChange={handleInputChange} placeholder="e.g., Karnataka" className="mt-1" />
+                                    <Input
+                                        id="ownerState"
+                                        name="ownerState"
+                                        value={formData.ownerState}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., Karnataka"
+                                        className={cn("mt-1", errors.ownerState && 'border-red-500')}
+                                    />
+                                    {errors.ownerState && <p className="text-red-500 text-sm mt-1">{errors.ownerState}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerCountry" className="font-semibold text-gray-700">Country</Label>
-                                    <Input id="ownerCountry" name="ownerCountry" value={formData.ownerCountry} onChange={handleInputChange} placeholder="e.g., India" className="mt-1" />
+                                    <Input
+                                        id="ownerCountry"
+                                        name="ownerCountry"
+                                        value={formData.ownerCountry}
+                                        onChange={handleInputChange}
+                                        placeholder="e.g., India"
+                                        className={cn("mt-1", errors.ownerCountry && 'border-red-500')}
+                                    />
+                                    {errors.ownerCountry && <p className="text-red-500 text-sm mt-1">{errors.ownerCountry}</p>}
                                 </div>
                             </div>
                         </div>
@@ -581,21 +801,21 @@ const CampaignCreationPage = () => {
             case 5:
                 return (
                     <>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-2 text-center">Final Step: Review & Pay</h2>
-                        <p className="text-center text-gray-500 mb-8">Confirm your campaign details and proceed to payment.</p>
-                        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                            <div className="lg:col-span-3 space-y-6">
-                                <div className="bg-white p-5 rounded-xl border">
-                                    <h3 className="font-bold text-lg mb-3 flex items-center"><FileText className="mr-2 h-5 w-5 text-blue-600" />Campaign Summary</h3>
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2 text-center">Final Step: Review & Pay</h2>
+                        <p className="text-center text-gray-500 mb-6">Confirm your campaign details and proceed to payment.</p>
+                        <div className="flex flex-col lg:flex-row gap-6">
+                            <div className="lg:w-3/5 space-y-6">
+                                <div className="bg-white p-4 sm:p-5 rounded-xl border">
+                                    <h3 className="font-bold text-lg mb-3 flex items-center"><FileText className="mr-2 h-5 w-5 text-purple-600" />Campaign Summary</h3>
                                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                                         <p className="text-gray-500">Name</p><p className="font-medium text-gray-800">{formData.campaignName}</p>
                                         <p className="text-gray-500">Platform</p><p className="font-medium text-gray-800">{formData.platform}</p>
                                         <p className="text-gray-500">Deadline</p><p className="font-medium text-gray-800">{formData.deadline ? format(new Date(formData.deadline), 'PPP') : 'N/A'}</p>
-                                        <p className="text-gray-500 col-span-2">Categories</p><p className="font-medium text-gray-800 col-span-2">{formData.categories.join(', ')}</p>
+                                        <p className="text-gray-500 col-span-2">Categories</p><p className="font-medium text-gray-800 col-span-2">{formData.categories.join(', ') || 'None'}</p>
                                     </div>
                                 </div>
-                                <div className="bg-white p-5 rounded-xl border">
-                                    <h3 className="font-bold text-lg mb-3 flex items-center"><Users className="mr-2 h-5 w-5 text-blue-600" />Services & Targeting</h3>
+                                <div className="bg-white p-4 sm:p-5 rounded-xl border">
+                                    <h3 className="font-bold text-lg mb-3 flex items-center"><Users className="mr-2 h-5 w-5 text-purple-600" />Services & Targeting</h3>
                                     <div className="space-y-2 text-sm">
                                         {formData.services.reel > 0 && <p><span className="font-medium text-gray-800">{formData.services.reel} x</span> Instagram Reels</p>}
                                         {formData.services.story > 0 && <p><span className="font-medium text-gray-800">{formData.services.story} x</span> Instagram Stories</p>}
@@ -610,15 +830,14 @@ const CampaignCreationPage = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="lg:col-span-2">
-                                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl space-y-4 sticky top-8">
+                            <div className="lg:w-2/5 lg:sticky lg:top-8">
+                                <div className="bg-purple-50 border border-purple-200 p-4 sm:p-6 rounded-xl space-y-4">
                                     <h3 className="font-bold text-lg text-center text-gray-800">Cost Breakdown</h3>
                                     <div className="space-y-2 text-sm">
                                         <div className="flex justify-between">
                                             <p className="text-gray-600">Total Creator Budget</p>
                                             <p className="font-medium text-gray-800">₹{creatorsCost.toLocaleString('en-IN')}</p>
                                         </div>
-                                        {/* --- CHANGE: Updated Service Fee display --- */}
                                         <div className="flex justify-between">
                                             <p className="text-gray-600">Platform Fee</p>
                                             <p className="font-medium text-gray-800">₹{serviceFee.toLocaleString('en-IN')}</p>
@@ -627,9 +846,9 @@ const CampaignCreationPage = () => {
                                     <div className="border-t border-dashed border-gray-300 my-4"></div>
                                     <div className="flex justify-between items-center">
                                         <p className="text-lg font-bold text-gray-900">Total Payable</p>
-                                        <p className="text-2xl font-extrabold text-blue-700">₹{Math.round(totalAmount).toLocaleString('en-IN')}</p>
+                                        <p className="text-xl sm:text-2xl font-extrabold text-purple-700">₹{Math.round(totalAmount).toLocaleString('en-IN')}</p>
                                     </div>
-                                    <Button onClick={handlePayment} disabled={isSubmitting || !user} className="w-full bg-blue-600 hover:bg-blue-700 text-base py-3 mt-4">
+                                    <Button onClick={handlePayment} disabled={isSubmitting || !user} className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4">
                                         {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-5 w-5" />}
                                         Pay Securely
                                     </Button>
@@ -641,18 +860,18 @@ const CampaignCreationPage = () => {
                 );
             case 6:
                 return (
-                    <div className="text-center py-10">
+                    <div className="text-center py-8 sm:py-10">
                         {paymentStatus === 'success' ? (
                             <>
-                                <CheckCircle className="h-20 w-20 text-green-500 mx-auto animate-pulse" />
-                                <h3 className="text-3xl font-bold text-green-600 mt-4">Payment Successful!</h3>
+                                <CheckCircle className="h-16 w-16 sm:h-20 sm:w-20 text-green-500 mx-auto animate-pulse" />
+                                <h3 className="text-2xl sm:text-3xl font-bold text-green-600 mt-4">Payment Successful!</h3>
                                 <p className="text-gray-600 mt-2">Your campaign is under review. We&apos;ll notify you upon approval.</p>
-                                <Button onClick={() => window.location.reload()} className="mt-6">Create Another Campaign</Button>
+                                <Button onClick={() => window.location.reload()} className="mt-6 bg-purple-600 hover:bg-purple-700">Create Another Campaign</Button>
                             </>
                         ) : (
                             <>
-                                <X className="h-20 w-20 text-red-500 mx-auto" />
-                                <h3 className="text-3xl font-bold text-red-600 mt-4">Payment Failed</h3>
+                                <X className="h-16 w-16 sm:h-20 sm:w-20 text-red-500 mx-auto" />
+                                <h3 className="text-2xl sm:text-3xl font-bold text-red-600 mt-4">Payment Failed</h3>
                                 <p className="text-gray-600 mt-2">There was an issue with your payment. Please try again.</p>
                                 <Button onClick={() => setCurrentStep(5)} className="mt-6" variant="destructive">
                                     <ArrowLeft className="mr-2 h-4 w-4" /> Try Again
@@ -668,55 +887,55 @@ const CampaignCreationPage = () => {
     if (!isClient || !isAuthReady) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                <Loader2 className="h-12 w-12 animate-spin text-purple-600" />
             </div>
         );
     }
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <div className="container mx-auto p-4 sm:p-8 max-w-6xl">
-                <div className="bg-white p-6 sm:p-10 rounded-2xl shadow-lg border border-gray-200">
-                    <h1 className="text-3xl sm:text-4xl font-extrabold text-center text-gray-800 mb-2">
+            <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
+                {/* Added pb-20 to ensure content is not hidden behind a potential bottom navbar */}
+                <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
+                    <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">
                         Launch Your Next Campaign
                     </h1>
-                    <p className="text-center text-gray-500 mb-10">Follow the steps below to get your campaign&apos;s live.</p>
+                    <p className="text-center text-gray-500 mb-6 sm:mb-8">Follow the steps below to get your campaign's live.</p>
 
-                    <div className="flex justify-between items-start mb-10 relative">
+                    <div className="flex justify-between items-start mb-6 sm:mb-8 relative">
                         <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 transform -translate-y-1/2">
-                            <div className="h-full bg-blue-600 transition-all duration-500" style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}></div>
+                            <div className="h-full bg-purple-600 transition-all duration-500" style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}></div>
                         </div>
                         {steps.map((step, index) => (
                             <div key={index} className="relative z-10 flex flex-col items-center flex-1">
-                                <div className={`w-10 h-10 flex items-center justify-center rounded-full font-bold text-white transition-all duration-300 border-4 ${index <= currentStep ? 'bg-blue-600 border-white' : 'bg-gray-300 border-gray-50'}`}>
-                                    {index < currentStep ? <Check className="h-5 w-5" /> : <step.icon className="h-5 w-5" />}
+                                <div className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-full font-bold text-white transition-all duration-300 border-4 ${index <= currentStep ? 'bg-purple-600 border-white' : 'bg-gray-300 border-gray-50'}`}>
+                                    {index < currentStep ? <Check className="h-4 w-4 sm:h-5 sm:w-5" /> : <step.icon className="h-4 w-4 sm:h-5 sm:w-5" />}
                                 </div>
-                                <span className={`mt-2 text-xs sm:text-sm text-center font-semibold ${index <= currentStep ? 'text-blue-600' : 'text-gray-500'}`}>
+                                <span className={`mt-2 text-xs text-center font-semibold hidden xs:block ${index <= currentStep ? 'text-purple-600' : 'text-gray-500'}`}>
                                     {step.name}
                                 </span>
                             </div>
                         ))}
                     </div>
 
-                    <div className="min-h-[450px]">
+                    <div className="min-h-[400px] sm:min-h-[450px]">
                         {renderStep()}
                     </div>
 
-                    {currentStep < steps.length - 2 && (
-                        <div className="flex justify-between mt-10 pt-6 border-t">
-                            <Button onClick={prevStep} variant="outline" className="px-6 py-3 text-base" disabled={currentStep === 0}>
-                                <ArrowLeft className="mr-2 h-5 w-5" /> Back
+                    {currentStep < steps.length - 1 && ( // Show navigation if not on the last (Confirmation) step
+                        <div className="flex justify-between mt-6 pt-4 border-t">
+                            <Button onClick={prevStep} variant="outline" className="px-3 sm:px-4 py-2 text-sm sm:text-base" disabled={currentStep === 0}>
+                                <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" /> Back
                             </Button>
-                            <Button onClick={nextStep} className="px-6 py-3 text-base bg-blue-600 hover:bg-blue-700">
-                                Next <ArrowRight className="ml-2 h-5 w-5" />
-                            </Button>
-                        </div>
-                    )}
-                    {currentStep === steps.length - 2 && ( // Only show on Summary step
-                        <div className="flex justify-between mt-10 pt-6 border-t">
-                            <Button onClick={prevStep} variant="outline" className="px-6 py-3 text-base">
-                                <ArrowLeft className="mr-2 h-5 w-5" /> Back to Edit
-                            </Button>
+                            {currentStep < steps.length - 2 ? ( // Regular Next button
+                                <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700">
+                                    Next <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
+                                </Button>
+                            ) : ( // Review & Pay button on the step before Confirmation
+                                <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700">
+                                    Review & Pay <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
+                                </Button>
+                            )}
                         </div>
                     )}
                 </div>

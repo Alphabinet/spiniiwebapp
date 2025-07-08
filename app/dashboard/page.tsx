@@ -259,7 +259,7 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
                 </div>
                 <div className="text-center">
                     <p className="font-semibold text-yellow-400 tracking-widest">PREMIUM MEMBERSHIP</p>
-                    <h3 className="text-3xl font-bold text-white mt-1">EXCLUSIVE ACCESS</h3>
+                    <h3 className="text-xl font-bold text-white mt-1">EXCLUSIVE ACCESS</h3>
                 </div>
                 <div className="border border-yellow-400/50 rounded-xl p-6 my-8 text-center bg-zinc-900/50">
                     <p className="text-5xl font-bold text-white">
@@ -280,13 +280,14 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
                     <FeatureListItem>Dedicated manager support 24/7</FeatureListItem>
                     <FeatureListItem>Priority access to new campaigns</FeatureListItem>
                 </ul>
+                {/* Updated link and text */}
                 <Link href="/dashboard/profile" className="w-full">
                     <span className="block w-full text-center px-8 py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-all duration-300 transform hover:scale-105 shadow-lg">
-                        GET STARTED NOW
+                        Become Creator
                     </span>
                 </Link>
                 <p className="text-xs text-gray-400 text-center mt-4">
-                    By subscribing, you agree to our <a href="#" className="underline">Terms of Service</a> & <a href="#" className="underline">Privacy Policy</a>. Cancel anytime.
+                    By subscribing, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
                 </p>
             </div>
         </div>
@@ -387,7 +388,8 @@ export default function OverviewPage() {
         const applicationStatus = getStatusInfo(creatorData.status);
 
         return (
-            <div className="space-y-8">
+            // Added mb-24 here
+            <div className="space-y-8 mb-24">
                 <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-8 rounded-2xl shadow-2xl relative overflow-hidden">
                     <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/5 rounded-full filter blur-2xl"></div>
                     <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-white/5 rounded-full filter blur-2xl"></div>
@@ -414,7 +416,10 @@ export default function OverviewPage() {
                                     </div>
                                     <a href={creatorData.instagramProfileLink} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline font-medium">@{creatorData.instagramUsername}</a>
                                 </div>
-                                <Link href="/dashboard/creator-application"><span className="px-5 py-2.5 bg-purple-50 text-purple-700 rounded-lg font-semibold text-sm hover:bg-purple-100 transition-colors cursor-pointer">Manage Application</span></Link>
+                                {/* Updated link and text */}
+                                <Link href="/dashboard/profile" className="w-full sm:w-auto">
+                                    <span className="px-5 py-2.5 bg-purple-50 text-purple-700 rounded-lg font-semibold text-sm hover:bg-purple-100 transition-colors cursor-pointer">Manage Profile</span>
+                                </Link>
                             </div>
                             <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <InfoCard title="Followers" value={creatorData.totalFollowers || 'N/A'} icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 016-5.197M15 21a9 9 0 00-9-5.197" /></svg>} />
@@ -447,7 +452,8 @@ export default function OverviewPage() {
 
     // Default view for new/normal users
     return (
-        <div className="space-y-8">
+        // Added mb-24 here
+        <div className="space-y-8 mb-24">
             <NormalUserProfile user={user!} />
             {user && (
                 <div className="bg-white p-6 rounded-2xl shadow-lg border mt-8">

@@ -3,13 +3,68 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '@/lib/firebaseConfig';
 import {
-  collection, getDocs, query, orderBy, doc, updateDoc,
-  startAfter, limit, getCountFromServer, DocumentData, QueryDocumentSnapshot
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  doc,
+  updateDoc,
+  startAfter,
+  limit,
+  getCountFromServer,
+  DocumentData,
+  QueryDocumentSnapshot,
+  getDoc
 } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { FiSearch, FiX, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { Booking, FirestoreTimestamp } from '@/types/booking'; // Extracted to separate file
-import Image from 'next/image'; // Added for image optimization
+import { FiSearch, FiX, FiChevronLeft, FiChevronRight, FiMenu } from 'react-icons/fi';
+import Image from 'next/image';
+
+// --- Type Definitions ---
+interface FirestoreTimestamp {
+  seconds: number;
+  nanoseconds: number;
+}
+
+interface CreatorContact {
+  email?: string;
+  phone?: string;
+  instagramProfileLink?: string;
+}
+
+interface Booking {
+  id: string;
+  creatorId: string;
+  bookerDetails: {
+    fullName: string;
+    email: string;
+    phoneNumber: string;
+  };
+  creatorName: string;
+  creatorUsername: string;
+  creatorProfile?: string;
+  createdAt: FirestoreTimestamp;
+  services: {
+    reels: number;
+    story: number;
+    reelsStory: number;
+  };
+  campaign: {
+    name: string;
+    description: string;
+    deadline?: FirestoreTimestamp;
+    demoVideoUrl?: string;
+    demoVideoName?: string;
+  };
+  payment: {
+    amount: number;
+    currency: string;
+    status: string;
+    transactionId: string;
+  };
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  creatorContact?: CreatorContact;
+}
 
 // --- Helper Functions ---
 const formatDate = (timestamp: FirestoreTimestamp | null | undefined): string => {
@@ -31,7 +86,6 @@ const formatCurrency = (amount: number): string => {
   }).format(amount || 0);
 };
 
-// Status options for filtering
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'pending', label: 'Pending' },
@@ -40,6 +94,7 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' }
 ];
 
+// --- Main Component ---
 const BookingsPage = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,12 +107,15 @@ const BookingsPage = () => {
   const [totalBookings, setTotalBookings] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const pageSize = 10;
 
   const fetchBookings = useCallback(async (page = 1, lastDoc: QueryDocumentSnapshot<DocumentData> | null = null) => {
     setLoading(true);
+    setError(null);
     try {
-      // Get total count only on the first load
+      // Get total count
       if (page === 1) {
         const countQuery = query(collection(db, "bookings"));
         const snapshot = await getCountFromServer(countQuery);
@@ -66,11 +124,11 @@ const BookingsPage = () => {
         setTotalPages(Math.ceil(totalCount / pageSize));
       }
 
-      // Construct the query for fetching data
+      // Construct query
       const bookingsQuery = query(
         collection(db, "bookings"),
         orderBy("createdAt", "desc"),
-        ...(lastDoc ? [startAfter(lastDoc)] : []),
+        ...(lastDoc && page > 1 ? [startAfter(lastDoc)] : []),
         limit(pageSize)
       );
 
@@ -80,16 +138,91 @@ const BookingsPage = () => {
         ...doc.data()
       } as Booking));
 
+      // Enrich bookings with creator contact info and Instagram profile
+      const enrichedBookings = await Promise.all(
+        bookingsData.map(async (booking) => {
+          if (booking.creatorId) {
+            try {
+              // 1. Get creator application
+              const creatorAppRef = doc(db, "creatorApplications", booking.creatorId);
+              const creatorAppSnap = await getDoc(creatorAppRef);
+              
+              if (creatorAppSnap.exists()) {
+                const creatorData = creatorAppSnap.data();
+                const userId = creatorData.userId;
+                
+                if (!userId) {
+                  return {
+                    ...booking,
+                    creatorContact: {
+                      email: creatorData.emailAddress || 'N/A',
+                      phone: creatorData.mobileNumber || 'N/A',
+                      instagramProfileLink: 'N/A'
+                    }
+                  };
+                }
+
+                // 2. Get user document
+                const userDocRef = doc(db, "users", userId);
+                const userDocSnap = await getDoc(userDocRef);
+                
+                if (userDocSnap.exists()) {
+                  const userData = userDocSnap.data();
+                  const creatorAppId = userData.creatorApplicationId;
+                  
+                  if (!creatorAppId) {
+                    return {
+                      ...booking,
+                      creatorContact: {
+                        email: creatorData.emailAddress || 'N/A',
+                        phone: creatorData.mobileNumber || 'N/A',
+                        instagramProfileLink: 'N/A'
+                      }
+                    };
+                  }
+
+                  // 3. Get creator application document for Instagram
+                  const creatorAppRef2 = doc(db, "creatorApplications", creatorAppId);
+                  const creatorAppSnap2 = await getDoc(creatorAppRef2);
+                  
+                  if (creatorAppSnap2.exists()) {
+                    const creatorAppData = creatorAppSnap2.data();
+                    return {
+                      ...booking,
+                      creatorContact: {
+                        email: creatorData.emailAddress || 'N/A',
+                        phone: creatorData.mobileNumber || 'N/A',
+                        instagramProfileLink: creatorAppData.instagramProfileLink || 'N/A'
+                      }
+                    };
+                  }
+                }
+              }
+            } catch (e) {
+              console.error(`Failed to fetch creator details for ID: ${booking.creatorId}`, e);
+            }
+          }
+          return { 
+            ...booking, 
+            creatorContact: { 
+              email: 'Not Found', 
+              phone: 'Not Found',
+              instagramProfileLink: 'Not Found'
+            } 
+          };
+        })
+      );
+      
       setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1] ?? null);
-      setBookings(bookingsData);
-      setError(null);
+      setBookings(enrichedBookings);
+
     } catch (err) {
       console.error("Error fetching bookings:", err);
       setError("Failed to load bookings. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [pageSize]); // Added pageSize to dependency array
+  }, [pageSize]);
 
   useEffect(() => {
     fetchBookings(1, null);
@@ -101,9 +234,8 @@ const BookingsPage = () => {
       const bookingRef = doc(db, "bookings", bookingId);
       await updateDoc(bookingRef, { status: newStatus });
 
-      setBookings(prev => prev.map(booking =>
-        booking.id === bookingId ? { ...booking, status: newStatus } : booking
-      ));
+      const updatedBookings = bookings.map(b => b.id === bookingId ? { ...b, status: newStatus } : b);
+      setBookings(updatedBookings);
 
       if (selectedBooking?.id === bookingId) {
         setSelectedBooking(prev => prev ? { ...prev, status: newStatus } : null);
@@ -117,7 +249,6 @@ const BookingsPage = () => {
 
   const filteredBookings = useMemo(() => {
     if (!searchTerm && statusFilter === 'all') return bookings;
-
     const lowercasedTerm = searchTerm.toLowerCase();
     return bookings.filter(booking => {
       const matchesSearch = (
@@ -126,9 +257,7 @@ const BookingsPage = () => {
         booking.creatorName.toLowerCase().includes(lowercasedTerm) ||
         (booking.payment.transactionId && booking.payment.transactionId.toLowerCase().includes(lowercasedTerm))
       );
-
       const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
-
       return matchesSearch && matchesStatus;
     });
   }, [bookings, searchTerm, statusFilter]);
@@ -144,28 +273,21 @@ const BookingsPage = () => {
   };
 
   const handlePageChange = (newPage: number) => {
-    if (newPage > currentPage) {
+    if (newPage > 0 && newPage <= totalPages && newPage !== currentPage) {
       setCurrentPage(newPage);
-      fetchBookings(newPage, lastVisible);
-    }
-    // Note: Going to a previous page would require a more complex state management
-    // of lastVisible snapshots for each page, which is beyond this quick fix.
-    // For simplicity, this implementation mainly supports forward pagination.
-    else if (newPage < currentPage) {
-        // Reset and fetch from the beginning to go back
-        setCurrentPage(newPage);
-        fetchBookings(1, null); // This is a simplified way to handle "previous"
+      fetchBookings(newPage, newPage > currentPage ? lastVisible : null);
     }
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
     setStatusFilter('all');
+    setShowFilters(false);
   };
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-4">
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -192,7 +314,7 @@ const BookingsPage = () => {
 
   if (loading && bookings.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] p-6">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-4">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
         <p className="mt-4 text-gray-600">Loading bookings...</p>
       </div>
@@ -200,26 +322,72 @@ const BookingsPage = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="space-y-6">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bookings Management</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Showing {filteredBookings.length} of {totalBookings} bookings
-              {statusFilter !== 'all' && ` (filtered by ${statusFilter})`}
-            </p>
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-4">
+      <div className="space-y-4">
+        <header className="flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Bookings Management</h1>
+              <p className="mt-1 text-sm text-gray-600">
+                Showing {filteredBookings.length} of {totalBookings} bookings
+                {statusFilter !== 'all' && ` (filtered by ${statusFilter})`}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="md:hidden bg-gray-100 p-2 rounded-lg"
+              aria-label="Toggle filters"
+            >
+              <FiMenu className="h-5 w-5 text-gray-700" />
+            </button>
           </div>
 
-          <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
-            <div className="relative w-full md:w-64">
+          {showFilters && (
+            <div className="md:hidden bg-white p-3 rounded-lg shadow-sm border border-gray-200">
+              <div className="relative mb-3">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiSearch className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search bookings..."
+                  className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    <FiX className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                  </button>
+                )}
+              </div>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                {STATUS_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="hidden md:flex gap-3">
+            <div className="relative w-full max-w-xs">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <FiSearch className="h-5 w-5 text-gray-400" />
               </div>
               <input
                 type="text"
                 placeholder="Search bookings..."
-                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -227,6 +395,7 @@ const BookingsPage = () => {
                 <button
                   onClick={() => setSearchTerm('')}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  aria-label="Clear search"
                 >
                   <FiX className="h-4 w-4 text-gray-400 hover:text-gray-600" />
                 </button>
@@ -236,11 +405,11 @@ const BookingsPage = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="block w-full md:w-48 py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className="block w-full max-w-[180px] py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
             >
               {STATUS_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                    {option.label}
                 </option>
               ))}
             </select>
@@ -251,12 +420,12 @@ const BookingsPage = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booker</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Creator</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Booker</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Creator</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden xs:table-cell">Date</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th scope="col" className="px-3 py-2 sm:px-4 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -264,46 +433,56 @@ const BookingsPage = () => {
                 <tr
                   key={booking.id}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => setSelectedBooking(booking)}
+                  onClick={() => {
+                    setSelectedBooking(booking);
+                    setIsModalOpen(true);
+                  }}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-3 sm:px-4 sm:py-4">
                     <div className="flex items-center">
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{booking.bookerDetails.fullName}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-[160px]">{booking.bookerDetails.email}</div>
+                      <div className="ml-1">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-[100px] sm:max-w-[160px]">
+                          {booking.bookerDetails.fullName}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate max-w-[100px] sm:max-w-[160px]">
+                          {booking.bookerDetails.email}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-3 sm:px-4 sm:py-4 hidden sm:table-cell">
                     <div className="flex items-center">
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{booking.creatorName}</div>
-                        <div className="text-xs text-gray-500">@{booking.creatorUsername}</div>
+                      <div className="ml-1">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900 truncate max-w-[100px]">
+                          {booking.creatorName}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate max-w-[100px]">
+                          @{booking.creatorUsername}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900">
                     {formatCurrency(booking.payment.amount)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-500 hidden xs:table-cell">
                     {formatDate(booking.createdAt)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(booking.status)}`}>
+                  <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-[10px] xs:text-xs font-medium rounded-full capitalize ${getStatusColor(booking.status)}`}>
                       {booking.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-3 py-3 sm:px-4 sm:py-4 whitespace-nowrap text-sm font-medium">
                     {updatingBookingId === booking.id ? (
-                      <div className="w-24 h-8 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-indigo-500"></div>
+                      <div className="w-20 h-6 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-indigo-500"></div>
                       </div>
                     ) : (
                       <select
                         value={booking.status}
                         onChange={(e) => updateBookingStatus(booking.id, e.target.value as Booking['status'])}
-                        className={`rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm py-1 ${getStatusColor(booking.status).replace('text', 'bg')
-                          }`}
+                        className={`rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 ${getStatusColor(booking.status).replace('text', 'bg')}`}
                         onClick={e => e.stopPropagation()}
                       >
                         <option value="pending">Pending</option>
@@ -343,21 +522,20 @@ const BookingsPage = () => {
           </table>
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6">
             <div className="flex flex-1 justify-between sm:hidden">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
                 Previous
               </button>
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
                 Next
               </button>
@@ -420,41 +598,43 @@ const BookingsPage = () => {
         )}
       </div>
 
-      {/* Booking Details Modal */}
-      {selectedBooking && (
+      {selectedBooking && isModalOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 transition-opacity"
-          onClick={() => setSelectedBooking(null)}
+          className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-2 sm:p-4"
+          onClick={() => {
+            setSelectedBooking(null);
+            setIsModalOpen(false);
+          }}
         >
           <div
-            className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto transform transition-all duration-300 scale-95 animate-scaleIn"
+            className="bg-white rounded-xl shadow-xl w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl max-h-[95vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
           >
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900" id="modal-title">Booking Details</h3>
-                  <p className="text-sm text-gray-500 mt-1">ID: {selectedBooking.id}</p>
-                  <div className="mt-2">
-                    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(selectedBooking.status)}`}>
-                      {selectedBooking.status}
-                    </span>
-                  </div>
+            <div className="sticky top-0 bg-white z-10 p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900">Booking Details</h3>
+              <button
+                onClick={() => {
+                  setSelectedBooking(null);
+                  setIsModalOpen(false);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full"
+                aria-label="Close"
+              >
+                <FiX className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="p-4 sm:p-6">
+              <div className="mb-4">
+                <p className="text-sm text-gray-500">ID: {selectedBooking.id}</p>
+                <div className="mt-1">
+                  <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full capitalize ${getStatusColor(selectedBooking.status)}`}>
+                    {selectedBooking.status}
+                  </span>
                 </div>
-                <button
-                  onClick={() => setSelectedBooking(null)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full"
-                  aria-label="Close"
-                  id="closeModalButton"
-                >
-                  <FiX className="h-6 w-6" />
-                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="text-sm font-semibold text-gray-800 mb-3 uppercase tracking-wider">Booker Information</h4>
                   <div className="space-y-3 text-sm">
@@ -479,18 +659,44 @@ const BookingsPage = () => {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="text-sm font-semibold text-gray-800 mb-3 uppercase tracking-wider">Creator Information</h4>
-                  <div className="flex items-center">
+                  <div className="flex items-center mb-3">
                     <Image
                       className="h-12 w-12 rounded-full object-cover mr-4"
                       src={selectedBooking.creatorProfile || `https://ui-avatars.com/api/?name=${selectedBooking.creatorName}&background=random&color=fff&size=128`}
                       alt={selectedBooking.creatorName}
                       width={48}
                       height={48}
-                      unoptimized // Use this if the src can be an external URL like ui-avatars
+                      unoptimized
                     />
                     <div>
                       <p className="font-semibold text-gray-900">{selectedBooking.creatorName}</p>
                       <p className="text-gray-600">@{selectedBooking.creatorUsername}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 text-sm border-t border-gray-200 pt-3 mt-3">
+                    <div>
+                      <p className="text-xs text-gray-500">Email</p>
+                      <p className="font-medium text-gray-900">
+                        {selectedBooking.creatorContact?.email || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Contact Number</p>
+                      <p className="font-medium text-gray-900">
+                        {selectedBooking.creatorContact?.phone || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Instagram Profile</p>
+                      <a 
+                        href={selectedBooking.creatorContact?.instagramProfileLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="font-medium text-indigo-600 hover:underline"
+                      >
+                        {selectedBooking.creatorContact?.instagramProfileLink || 'N/A'}
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -585,15 +791,18 @@ const BookingsPage = () => {
 
               <div className="flex justify-end space-x-3 mt-6">
                 <button
-                  onClick={() => setSelectedBooking(null)}
-                  className="px-5 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  onClick={() => {
+                    setSelectedBooking(null);
+                    setIsModalOpen(false);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-gray-500"
                 >
                   Close
                 </button>
                 <button
-                  onClick={() => updateBookingStatus(selectedBooking.id, 'completed')}
-                  disabled={updatingBookingId === selectedBooking.id}
-                  className="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-75"
+                  onClick={() => selectedBooking && updateBookingStatus(selectedBooking.id, 'completed')}
+                  disabled={updatingBookingId === selectedBooking.id || selectedBooking.status === 'completed'}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-75"
                 >
                   {updatingBookingId === selectedBooking.id ? 'Marking...' : 'Mark as Completed'}
                 </button>

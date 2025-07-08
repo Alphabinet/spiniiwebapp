@@ -51,7 +51,7 @@ interface CreatorApplication {
 const formatDate = (timestamp: FirestoreTimestamp | null | undefined): string => {
   if (!timestamp || typeof timestamp.seconds !== 'number') return 'N/A';
   try {
-    return format(new Date(timestamp.seconds * 1000), 'LLL d, y, h:mm a');
+    return format(new Date(timestamp.seconds * 1000), 'MMM d, y, h:mm a');
   } catch (error) {
     console.error("Error formatting date:", error);
     return 'Invalid Date';
@@ -152,8 +152,11 @@ const ApplicationsPage = () => {
         ? `Congratulations! Your creator application has been approved. You can now start receiving bookings.`
         : `Your creator application has been reviewed. Status: ${newStatus}. Feedback: ${feedbackText}`;
 
-      const appIdGlobal = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      await addDoc(collection(db, `artifacts/${appIdGlobal}/users/${applicationToUpdate.userId}/notifications`), {
+      // This __app_id global might not be defined. Using a fallback.
+      const appIdGlobal = typeof window !== 'undefined' && typeof (window as any).__app_id !== 'undefined' ? (window as any).__app_id : 'default-app-id';
+
+      // Ensure the path to notifications is correct, assuming it's under user specific.
+      await addDoc(collection(db, `users/${applicationToUpdate.userId}/notifications`), {
         message: notificationMessage,
         read: false,
         timestamp: new Date(),
@@ -229,7 +232,7 @@ const ApplicationsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-10">
+      <div className="flex items-center justify-center min-h-screen p-4">
         <div className="flex flex-col items-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600 mb-4"></div>
           <p className="text-gray-700 text-lg">Loading creator applications...</p>
@@ -239,16 +242,16 @@ const ApplicationsPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <ToastContainer position="bottom-right" autoClose={3000} />
 
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-md p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Creator Applications</h1>
-              <p className="mt-2 text-gray-600">
+        <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
+            <div className="w-full md:w-auto">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Creator Applications</h1>
+              <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
                 Review and manage creator applications. Found {filteredApplications.length} of {applications.length} total.
               </p>
 
@@ -257,9 +260,9 @@ const ApplicationsPage = () => {
                   <button
                     key={status}
                     onClick={() => setStatusFilter(status as 'all' | CreatorApplication['status'])}
-                    className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${statusFilter === status
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${statusFilter === status
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                       }`}
                   >
                     {status === 'all' ? 'All Statuses' : status}
@@ -268,17 +271,17 @@ const ApplicationsPage = () => {
               </div>
             </div>
 
-            <div className="w-full md:w-auto space-y-2">
+            <div className="w-full md:w-72 space-y-2">
               <div className="relative">
                 <input
                   type="text"
                   placeholder="Search creators..."
-                  className="w-full md:w-72 rounded-xl border border-gray-300 py-3 px-4 pl-11 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full rounded-xl border border-gray-300 py-2.5 px-4 pl-11 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
                 <svg
-                  className="absolute left-4 top-3.5 h-5 w-5 text-gray-400"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   viewBox="0 0 24 24"
@@ -288,7 +291,7 @@ const ApplicationsPage = () => {
                 </svg>
               </div>
 
-              <div className="text-sm text-gray-500 flex justify-between">
+              <div className="text-xs text-gray-500 flex justify-between">
                 <span>Sort by: Newest first</span>
                 <span>Page {currentPage} of {totalPages}</span>
               </div>
@@ -296,9 +299,10 @@ const ApplicationsPage = () => {
           </div>
         </div>
 
-        {/* Applications Table */}
+        {/* Applications List/Table */}
         <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
                 <tr>
@@ -348,7 +352,6 @@ const ApplicationsPage = () => {
                               <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
                               <line x1="17.5" y1="6.5" x2="17.5" y2="6.5" />
                             </svg>
-
                           </div>
                           <div>
                             <a
@@ -410,9 +413,76 @@ const ApplicationsPage = () => {
             </table>
           </div>
 
+          {/* Mobile Card View */}
+          <div className="md:hidden p-4 space-y-4">
+            {paginatedApplications.length > 0 ? paginatedApplications.map((app) => {
+              const metrics = engagementMetrics(app);
+              return (
+                <div key={app.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 mr-3">
+                        <Image
+                          src={app.profilePictureUrl || '/default-avatar.png'}
+                          alt={app.fullName}
+                          width={48}
+                          height={48}
+                          className="rounded-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-900">{app.fullName}</h3>
+                        <p className="text-xs text-gray-500">{app.cityState}</p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(app.status)}`}>
+                      {app.status}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-sm text-gray-700 mb-4">
+                    <p>
+                      <span className="font-medium">Instagram:</span>{' '}
+                      <a
+                        href={app.instagramProfileLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        @{app.instagramUsername}
+                      </a> ({formatNumber(app.totalFollowers)} followers)
+                    </p>
+                    <p><span className="font-medium">Reel Avg. Views:</span> {formatNumber(app.avgReelViews)} ({metrics.reelEngagement})</p>
+                    <p><span className="font-medium">Category:</span> {app.contentCategory}</p>
+                    <p><span className="font-medium">Applied:</span> {formatDate(app.timestamp)}</p>
+                  </div>
+
+                  <button
+                    onClick={() => handleReviewClick(app)}
+                    className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                  >
+                    Review Application
+                  </button>
+                </div>
+              );
+            }) : (
+              <div className="px-6 py-12 text-center">
+                <div className="text-gray-500 flex flex-col items-center justify-center">
+                  <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-lg">No applications found</p>
+                  <p className="mt-1 text-sm max-w-md">
+                    Try adjusting your search or filter criteria. No creator applications match your current settings.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 flex items-center justify-between border-t border-gray-200 flex-col sm:flex-row gap-3">
               <div className="text-sm text-gray-700">
                 Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
                 <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredApplications.length)}</span> of{' '}
@@ -422,14 +492,14 @@ const ApplicationsPage = () => {
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === 1 ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === totalPages ? 'bg-gray-100 text-gray-400' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
+                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
                 >
                   Next
                 </button>
@@ -441,22 +511,23 @@ const ApplicationsPage = () => {
 
       {/* Application Detail Modal */}
       {selectedApplication && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={() => !updating && setSelectedApplication(null)}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => !updating && setSelectedApplication(null)}>
           <div
-            className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full h-full sm:max-h-[90vh] sm:max-w-4xl overflow-y-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6 flex-grow overflow-y-auto"> {/* Added flex-grow and overflow for content scrolling */}
               {/* Modal Header */}
-              <div className="flex justify-between items-start mb-6 pb-4 border-b border-gray-200">
+              <div className="flex justify-between items-start mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-200">
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Creator Application Review</h3>
-                  <p className="text-gray-600 mt-1">Detailed information and review tools</p>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Creator Application Review</h3>
+                  <p className="text-gray-600 mt-1 text-sm sm:text-base">Detailed information and review tools</p>
                 </div>
                 <button
                   onClick={() => !updating && setSelectedApplication(null)}
                   disabled={updating}
-                  className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+                  className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
+                  aria-label="Close modal"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -465,25 +536,25 @@ const ApplicationsPage = () => {
               </div>
 
               {/* Creator Profile Section */}
-              <div className="flex flex-col md:flex-row gap-6 mb-8">
+              <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8 items-center md:items-start text-center md:text-left">
                 <div className="flex-shrink-0">
                   <Image
                     src={selectedApplication.profilePictureUrl || '/default-avatar.png'}
                     alt={selectedApplication.fullName}
-                    width={160}
-                    height={160}
-                    className="rounded-xl object-cover border border-gray-200"
+                    width={120}
+                    height={120}
+                    className="rounded-xl object-cover border border-gray-200 w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40"
                   />
                 </div>
-                <div className="flex-grow">
-                  <div className="flex flex-wrap justify-between">
-                    <div>
-                      <h4 className="text-xl font-bold text-gray-900">{selectedApplication.fullName}</h4>
-                      <div className="flex items-center mt-2">
+                <div className="flex-grow w-full">
+                  <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
+                    <div className="mb-3 md:mb-0">
+                      <h4 className="text-xl sm:text-2xl font-bold text-gray-900">{selectedApplication.fullName}</h4>
+                      <div className="flex items-center justify-center md:justify-start mt-2">
                         <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusColor(selectedApplication.status)}`}>
                           {selectedApplication.status}
                         </span>
-                        <span className="ml-3 text-sm text-gray-600">
+                        <span className="ml-2 sm:ml-3 text-xs sm:text-sm text-gray-600">
                           Applied on {formatDate(selectedApplication.timestamp)}
                         </span>
                       </div>
@@ -492,96 +563,106 @@ const ApplicationsPage = () => {
                       href={selectedApplication.instagramProfileLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium mt-2 md:mt-0"
+                      className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium text-sm sm:text-base"
                     >
-                      <svg className="h-5 w-5 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                      <svg className="h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 2C15.9 2 19 5.1 19 9c0 5.3-7 13-7 13S5 14.3 5 9c0-3.9 3.1-7 7-7zm0 9c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3z" />
                       </svg>
                       @{selectedApplication.instagramUsername}
                     </a>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
                     <div>
-                      <p className="text-sm text-gray-500">Contact</p>
-                      <p className="font-medium">{selectedApplication.emailAddress}</p>
-                      <p className="font-medium">{selectedApplication.mobileNumber}</p>
+                      <p className="text-xs sm:text-sm text-gray-500">Contact</p>
+                      <p className="font-medium text-sm sm:text-base">{selectedApplication.emailAddress}</p>
+                      <p className="font-medium text-sm sm:text-base">{selectedApplication.mobileNumber}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-500">Location</p>
-                      <p className="font-medium">{selectedApplication.cityState}</p>
-                      <p className="capitalize">{selectedApplication.gender}</p>
+                      <p className="text-xs sm:text-sm text-gray-500">Location</p>
+                      <p className="font-medium text-sm sm:text-base">{selectedApplication.cityState}</p>
+                      <p className="capitalize text-sm sm:text-base">{selectedApplication.gender}</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                  <p className="text-sm text-blue-800 font-medium">Followers</p>
-                  <p className="text-2xl font-bold text-blue-900">{formatNumber(selectedApplication.totalFollowers)}</p>
-                </div>
-                <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
-                  <p className="text-sm text-purple-800 font-medium">Avg. Reel Views</p>
-                  <p className="text-2xl font-bold text-purple-900">{formatNumber(selectedApplication.avgReelViews)}</p>
-                </div>
-                <div className="bg-pink-50 rounded-xl p-4 border border-pink-100">
-                  <p className="text-sm text-pink-800 font-medium">Engagement Rate</p>
-                  <p className="text-2xl font-bold text-pink-900">
-                    {calculateEngagementRate(selectedApplication.totalFollowers, selectedApplication.avgReelViews)}
-                  </p>
+              {/* Stats - Always stacked vertically */}
+              <div className="mb-6 sm:mb-8">
+                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Engagement Metrics</h4>
+                <div className="grid grid-cols-1 gap-4"> {/* Always 1 column */}
+                  {/* Followers */}
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 text-center">
+                    <p className="text-sm text-blue-800 font-medium">Followers</p>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-900">{formatNumber(selectedApplication.totalFollowers)}</p>
+                  </div>
+                  {/* Avg. Reel Views */}
+                  <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 text-center">
+                    <p className="text-sm text-purple-800 font-medium">Avg. Reel Views</p>
+                    <p className="text-xl sm:text-2xl font-bold text-purple-900">{formatNumber(selectedApplication.avgReelViews)}</p>
+                  </div>
+                  {/* Engagement Rate */}
+                  <div className="bg-pink-50 rounded-xl p-4 border border-pink-100 text-center">
+                    <p className="text-sm text-pink-800 font-medium">Engagement Rate</p>
+                    <p className="text-xl sm:text-2xl font-bold text-pink-900">
+                      {calculateEngagementRate(selectedApplication.totalFollowers, selectedApplication.avgReelViews)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Pricing Section */}
-              <div className="mb-8">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Pricing & Delivery</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm text-gray-500">Reel</p>
-                    <p className="text-xl font-bold">{formatCurrency(selectedApplication.reelPrice)}</p>
+              {/* Pricing Section - Always stacked vertically */}
+              <div className="mb-6 sm:mb-8">
+                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Pricing & Delivery</h4>
+                <div className="grid grid-cols-1 gap-4"> {/* Always 1 column */}
+                  {/* Reel Price */}
+                  <div className="border rounded-lg p-4 text-center">
+                    <p className="text-sm text-gray-500">Reel Price</p>
+                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.reelPrice)}</p>
                   </div>
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm text-gray-500">Story</p>
-                    <p className="text-xl font-bold">{formatCurrency(selectedApplication.storyPrice)}</p>
+                  {/* Story Price */}
+                  <div className="border rounded-lg p-4 text-center">
+                    <p className="text-sm text-gray-500">Story Price</p>
+                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.storyPrice)}</p>
                   </div>
-                  <div className="border rounded-lg p-4">
-                    <p className="text-sm text-gray-500">Reel + Story</p>
-                    <p className="text-xl font-bold">{formatCurrency(selectedApplication.reelsStoryPrice)}</p>
+                  {/* Reel + Story Price */}
+                  <div className="border rounded-lg p-4 text-center">
+                    <p className="text-sm text-gray-500">Reel + Story Price</p>
+                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.reelsStoryPrice)}</p>
                   </div>
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm text-gray-500">Delivery Timeframe</p>
-                  <p className="font-medium">{selectedApplication.deliveryDuration} days</p>
+                  {/* Delivery Timeframe */}
+                  <div className="border rounded-lg p-4 text-center">
+                    <p className="text-sm text-gray-500">Delivery Timeframe</p>
+                    <p className="font-medium text-lg sm:text-xl">{selectedApplication.deliveryDuration} days</p>
+                  </div>
                 </div>
               </div>
 
               {/* Content Details */}
-              <div className="mb-8">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Content Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+              <div className="mb-6 sm:mb-8">
+                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Content Details</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="text-center sm:text-left">
                     <p className="text-sm text-gray-500">Content Category</p>
-                    <p className="font-medium">{selectedApplication.contentCategory}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedApplication.contentCategory}</p>
                   </div>
-                  <div>
+                  <div className="text-center sm:text-left">
                     <p className="text-sm text-gray-500">Languages</p>
-                    <p className="font-medium">{selectedApplication.contentLanguages}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedApplication.contentLanguages}</p>
                   </div>
                 </div>
 
                 {selectedApplication.portfolioLinks && selectedApplication.portfolioLinks.length > 0 && (
-                  <div className="mt-4">
+                  <div className="mt-4 text-center sm:text-left">
                     <p className="text-sm text-gray-500">Portfolio Links</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-2 mt-2 justify-center sm:justify-start">
                       {selectedApplication.portfolioLinks.map((link, index) => (
                         <a
                           key={index}
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-indigo-600 hover:underline text-sm bg-indigo-50 px-3 py-1 rounded-lg"
+                          className="text-indigo-600 hover:underline text-sm bg-indigo-50 px-3 py-1.5 rounded-lg"
                         >
                           Portfolio {index + 1}
                         </a>
@@ -591,21 +672,21 @@ const ApplicationsPage = () => {
                 )}
 
                 {selectedApplication.previousBrandCollabs && (
-                  <div className="mt-4">
+                  <div className="mt-4 text-center sm:text-left">
                     <p className="text-sm text-gray-500">Previous Brand Collaborations</p>
-                    <p className="font-medium">{selectedApplication.previousBrandCollabs}</p>
+                    <p className="font-medium text-sm sm:text-base">{selectedApplication.previousBrandCollabs}</p>
                   </div>
                 )}
               </div>
 
-              {/* Admin Actions */}
-              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Review Actions</h4>
+              {/* Admin Actions - Always stacked vertically */}
+              <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border border-gray-200">
+                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Review Actions</h4>
 
                 <div className="mb-4">
                   <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-2">
                     Application Feedback
-                    <span className="text-red-500">*</span> <span className="text-gray-500 text-sm font-normal">(required for rejection)</span>
+                    <span className="text-red-500">*</span> <span className="text-gray-500 text-xs sm:text-sm font-normal">(required for rejection)</span>
                   </label>
                   <textarea
                     id="feedback"
@@ -622,11 +703,11 @@ const ApplicationsPage = () => {
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col gap-3"> {/* Changed from sm:flex-row to flex-col */}
                   <button
                     onClick={() => updateApplicationStatus(selectedApplication.id, 'approved', feedback)}
                     disabled={updating}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70"
+                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
                   >
                     {updating ? (
                       <>
@@ -642,7 +723,7 @@ const ApplicationsPage = () => {
                   <button
                     onClick={() => updateApplicationStatus(selectedApplication.id, 'rejected', feedback)}
                     disabled={updating}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70"
+                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
                   >
                     {updating ? (
                       <>
@@ -658,7 +739,7 @@ const ApplicationsPage = () => {
                   <button
                     onClick={() => updateApplicationStatus(selectedApplication.id, 'onboarded', feedback)}
                     disabled={updating}
-                    className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70"
+                    className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
                   >
                     {updating ? (
                       <>
