@@ -108,7 +108,7 @@ export default function Navigation() {
     if (user) {
       const fetchUserProfileAndClaims = async () => {
         try {
-          const idTokenResult = await user.getIdTokenResult(true);
+          const idTokenResult = await user.getIdTokenResult(true); // Force token refresh
           const isAdmin = idTokenResult.claims.admin === true;
 
           const userRef = doc(db, "users", user.uid);
@@ -167,9 +167,9 @@ export default function Navigation() {
       return;
     }
 
-    const appIdGlobal = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-    const notificationsCollectionRef = collection(db, `artifacts/${appIdGlobal}/users/${userProfile.uid}/notifications`);
+    // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
+    // We are now fetching from `users/{userProfile.uid}/notifications`
+    const notificationsCollectionRef = collection(db, `users/${userProfile.uid}/notifications`);
     const q = query(notificationsCollectionRef, orderBy("timestamp", "desc"), limit(20));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -200,15 +200,13 @@ export default function Navigation() {
     });
 
     return () => unsubscribe();
-  }, [userProfile?.uid, displayDesktopNotification]);
-
+  }, [userProfile?.uid, displayDesktopNotification]); // Removed appIdGlobal from dependency array as it's no longer used in path
 
   // --- Action Functions ---
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      // Redirect to the desired relative sign-in page
-      router.push("/signin"); // Confirmed path
+      router.push("/signin");
       setIsSheetOpen(false);
     } catch (error) {
       console.error("Error signing out:", error);
@@ -220,24 +218,16 @@ export default function Navigation() {
     setIsSheetOpen(false);
   }
 
-  // --- UPDATED: handleSearchClick function ---
   const handleSearchClick = () => {
-    setIsSheetOpen(false); // Close mobile sheet if open
+    setIsSheetOpen(false);
 
-    // Check if we are already on the homepage
     if (window.location.pathname === "/") {
-      // Attempt to call the global function defined in app/page.tsx
       if (typeof window !== 'undefined' && typeof (window as any).focusHomepageSearchBar === 'function') {
         (window as any).focusHomepageSearchBar();
       } else {
-        // Fallback: If the global function isn't available (e.g., component not mounted yet),
-        // try to scroll to the section. Focusing might not work immediately.
-        // The ID should be on the <section> tag itself.
         document.getElementById("homepage-search-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     } else {
-      // If not on the homepage, navigate there with a specific hash.
-      // The homepage component will then listen for this hash and call its focus function.
       router.push("/#focus-search-input");
     }
   };
@@ -245,8 +235,8 @@ export default function Navigation() {
   const markNotificationAsRead = async (notificationId: string) => {
     if (!db || !userProfile?.uid) return;
     try {
-      const appIdGlobal = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-      const notificationRef = doc(db, `artifacts/${appIdGlobal}/users/${userProfile.uid}/notifications`, notificationId);
+      // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
+      const notificationRef = doc(db, `users/${userProfile.uid}/notifications`, notificationId);
       await updateDoc(notificationRef, { read: true });
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -257,10 +247,11 @@ export default function Navigation() {
     if (!db || !userProfile?.uid || unreadCount === 0) return;
     try {
       const batch = writeBatch(db);
-      const appIdGlobal = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
+      const notificationsCollectionRef = collection(db, `users/${userProfile.uid}/notifications`);
 
       notifications.filter(notif => !notif.read).forEach(notif => {
-        const notificationRef = doc(db, `artifacts/${appIdGlobal}/users/${userProfile.uid}/notifications`, notif.id);
+        const notificationRef = doc(notificationsCollectionRef, notif.id);
         batch.update(notificationRef, { read: true });
       });
       await batch.commit();
@@ -322,13 +313,13 @@ export default function Navigation() {
             {/* Left: Logo */}
             <Link href="/" className="flex items-center gap-2 group">
               <Image
-                src="/snaapii.png" // Path to your PNG logo in the public folder
-                alt="Snaapii Logo" // Alt text for accessibility
-                width={100} // Adjust width as needed
-                height={100} // Adjust height as needed
+                src="/snaapii.png"
+                alt="Snaapii Logo"
+                width={100}
+                height={100}
                 className="transition-all duration-300 group-hover:scale-110 group"
               />
-              <span className="sr-only">Snaapii</span> {/* Visually hidden text for accessibility */}
+              <span className="sr-only">Snaapii</span>
             </Link>
 
             {/* Center: Nav Items */}
@@ -462,12 +453,12 @@ export default function Navigation() {
         <div className="flex items-center justify-between h-16 px-4">
           <Link href="/" className="flex items-center gap-2">
             <Image
-              src="/snaapii.png" // Path to your PNG logo in the public folder
-              alt="Snaapii Logo" // Alt text for accessibility
-              width={100} // Adjust width for mobile
-              height={100} // Adjust height for mobile
+              src="/snaapii.png"
+              alt="Snaapii Logo"
+              width={100}
+              height={100}
             />
-            <span className="sr-only">Snaapii</span> {/* Visually hidden text for accessibility */}
+            <span className="sr-only">Snaapii</span>
           </Link>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon" className="text-gray-700 hover:bg-gray-100">
@@ -547,8 +538,7 @@ export default function Navigation() {
             } else if (item.onClick) {
               return (<button key={item.name} onClick={item.onClick} className={commonClasses}>{itemContent}</button>);
             } else if (isProfileOrSignIn) {
-                // Special handling for Profile/Sign In in mobile bottom nav
-                const targetHref = user ? "/dashboard" : "/signin"; // Confirmed path
+                const targetHref = user ? "/dashboard" : "/signin";
                 return (<Link key={item.name} href={targetHref} className={commonClasses}>{itemContent}</Link>);
             }
             else {

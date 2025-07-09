@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '@/lib/firebaseConfig';
-import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { format } from 'date-fns'; // Corrected import: ensure no '=' here
+import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { format } from 'date-fns';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Image from 'next/image';
@@ -29,8 +29,8 @@ interface CreatorApplication {
   reelsStoryPrice: string;
   deliveryDuration: string;
   timestamp: FirestoreTimestamp;
-  status: 'pending' | 'approved' | 'rejected' | 'onboarded';
-  adminFeedback?: string;
+  status: 'pending' | 'approved' | 'rejected'; // 'onboarded' removed
+  adminFeedback?: string | null; // Can be string or null for Firestore
   portfolioLinks?: string[];
   previousBrandCollabs?: string;
   audienceDemographics?: {
@@ -41,6 +41,7 @@ interface CreatorApplication {
   };
   subscriptionStatus?: 'active' | 'inactive' | 'trial';
   subscriptionExpiresAt?: FirestoreTimestamp;
+  updatedAt?: FirestoreTimestamp; // Added for consistency with serverTimestamp usage
 }
 
 interface FirestoreTimestamp {
@@ -51,7 +52,6 @@ interface FirestoreTimestamp {
 const ApplicationsPage = () => {
   const [applications, setApplications] = useState<CreatorApplication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedApp, setSelectedApp] = useState<CreatorApplication | null>(null);
   const [feedback, setFeedback] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | CreatorApplication['status']>('all');
@@ -61,8 +61,10 @@ const ApplicationsPage = () => {
   const formatDate = useCallback((timestamp: FirestoreTimestamp | null | undefined): string => {
     if (!timestamp?.seconds) return 'N/A';
     try {
-      return format(timestamp.seconds * 1000, 'MMM d, y, h:mm a');
-    } catch {
+      // Create a Date object from seconds (Firestore timestamps are in seconds)
+      return format(new Date(timestamp.seconds * 1000), 'MMM d, y, h:mm a');
+    } catch (error) {
+      console.error("Error formatting date:", error);
       return 'Invalid Date';
     }
   }, []);
@@ -81,7 +83,7 @@ const ApplicationsPage = () => {
       try {
         const q = query(
           collection(db, "creatorApplications"),
-          orderBy("timestamp", "desc")
+          orderBy("timestamp", "desc") // Order by timestamp desc (newest first)
         );
         const snapshot = await getDocs(q);
         const data = snapshot.docs.map(doc => ({
@@ -90,6 +92,7 @@ const ApplicationsPage = () => {
         } as CreatorApplication));
         setApplications(data);
       } catch (error) {
+        console.error("Failed to load applications:", error); // Log error
         toast.error("Failed to load applications");
       } finally {
         setLoading(false);
@@ -108,29 +111,58 @@ const ApplicationsPage = () => {
       return;
     }
 
-    try {
-      await updateDoc(doc(db, "creatorApplications", appId), {
-        status,
-        adminFeedback: feedbackText,
-        updatedAt: new Date(),
-      });
+    // Prepare the update object to avoid sending 'undefined' to Firestore
+    const updateData: { status: CreatorApplication['status']; adminFeedback?: string | null; updatedAt: any; } = {
+      status,
+      updatedAt: serverTimestamp(), // Use serverTimestamp() for accurate server-side time
+    };
 
+    // Conditionally include adminFeedback:
+    // If feedbackText is not empty, use it.
+    // If status is 'rejected' and feedbackText is empty, still include it (as empty string).
+    // Otherwise, set to null to explicitly clear the field in Firestore if it exists.
+    if (feedbackText.trim() !== '') {
+      updateData.adminFeedback = feedbackText.trim();
+    } else if (status === 'rejected') {
+      // For rejection, if feedback is empty, send empty string (validation above should catch this anyway)
+      updateData.adminFeedback = '';
+    } else {
+      // For approved/pending, if feedback is empty, set to null
+      updateData.adminFeedback = null;
+    }
+
+    try {
+      await updateDoc(doc(db, "creatorApplications", appId), updateData);
+
+      // Update client-side state to reflect changes immediately
       setApplications(prev => prev.map(app =>
-        app.id === appId ? { ...app, status, adminFeedback: feedbackText } : app
+        app.id === appId ? {
+          ...app,
+          status,
+          adminFeedback: updateData.adminFeedback, // Reflect the null/string change
+          // Client-side approximation of timestamp for immediate UI update.
+          // Firestore's serverTimestamp will be more accurate on the server.
+          updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as FirestoreTimestamp
+        } : app
       ));
 
-      await addDoc(collection(db, `users/${selectedApp?.userId}/notifications`), {
-        message: status === 'approved'
-          ? "Your application has been approved!"
-          : `Application ${status}. Feedback: ${feedbackText}`,
-        read: false,
-        timestamp: new Date(),
-        type: 'application_status'
-      });
+      // Notification logic for the user whose application was updated
+      if (selectedApp?.userId) {
+        await addDoc(collection(db, `users/${selectedApp.userId}/notifications`), {
+          message: status === 'approved'
+            ? "Your application has been approved!"
+            : `Application ${status}. Feedback: ${feedbackText.trim() !== '' ? feedbackText : 'No specific feedback provided.'}`,
+          read: false,
+          timestamp: serverTimestamp(), // Use serverTimestamp() for notifications too
+          type: 'application_status'
+        });
+      }
 
       toast.success(`Application ${status}`);
       setSelectedApp(null);
+      setFeedback(''); // Clear feedback after successful update
     } catch (error) {
+      console.error("Update failed:", error); // Crucial: Check your browser's console for detailed error messages
       toast.error("Update failed");
     }
   }, [selectedApp]);
@@ -142,27 +174,19 @@ const ApplicationsPage = () => {
       filtered = filtered.filter(app => app.status === statusFilter);
     }
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(app =>
-        app.fullName.toLowerCase().includes(term) ||
-        app.emailAddress.toLowerCase().includes(term) ||
-        app.instagramUsername.toLowerCase().includes(term)
-      );
-    }
+    // Search term filter removed
 
     const total = Math.ceil(filtered.length / itemsPerPage);
     const start = (currentPage - 1) * itemsPerPage;
     const paginated = filtered.slice(start, start + itemsPerPage);
 
     return { filteredApps: filtered, totalPages: total, paginatedApps: paginated };
-  }, [applications, searchTerm, statusFilter, currentPage]);
+  }, [applications, statusFilter, currentPage]);
 
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800',
     approved: 'bg-emerald-100 text-emerald-800',
     rejected: 'bg-rose-100 text-rose-800',
-    onboarded: 'bg-purple-100 text-purple-800'
   };
 
   if (loading) {
@@ -190,7 +214,8 @@ const ApplicationsPage = () => {
             </p>
 
             <div className="flex flex-wrap gap-3 mt-4">
-              {['all', 'pending', 'approved', 'rejected', 'onboarded'].map(status => (
+              {/* Filter buttons without 'onboarded' */}
+              {['all', 'pending', 'approved', 'rejected'].map(status => (
                 <button
                   key={status}
                   onClick={() => {
@@ -209,27 +234,7 @@ const ApplicationsPage = () => {
             </div>
           </div>
 
-          <div className="w-full md:w-80 relative">
-            <input
-              type="text"
-              placeholder="Search by name, email, or Instagram..."
-              className="w-full rounded-full border border-gray-300 pl-12 pr-5 py-3 text-base text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-300 shadow-sm"
-              value={searchTerm}
-              onChange={e => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
-            <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-500"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
+          {/* Search bar removed - section completely removed */}
         </div>
       </div>
 
@@ -285,7 +290,7 @@ const ApplicationsPage = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button
-                    onClick={() => setSelectedApp(app)}
+                    onClick={() => { setSelectedApp(app); setFeedback(app.adminFeedback || ''); }} // Pre-fill feedback if available
                     className="text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
                   >
                     Review
@@ -333,7 +338,7 @@ const ApplicationsPage = () => {
             </div>
 
             <button
-              onClick={() => setSelectedApp(app)}
+              onClick={() => { setSelectedApp(app); setFeedback(app.adminFeedback || ''); }} // Pre-fill feedback if available
               className="w-full mt-4 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-colors duration-200 shadow-md"
             >
               Review Application
@@ -382,7 +387,7 @@ const ApplicationsPage = () => {
             <div className="sticky top-0 bg-gradient-to-r from-purple-700 to-indigo-600 text-white p-5 rounded-t-2xl flex justify-between items-center shadow-md">
               <h3 className="text-2xl font-bold">Review Creator Application</h3>
               <button
-                onClick={() => setSelectedApp(null)}
+                onClick={() => { setSelectedApp(null); setFeedback(''); }} // Clear feedback on close
                 className="text-white hover:text-purple-100 text-2xl p-1 rounded-full hover:bg-purple-800 transition-colors duration-200"
                 aria-label="Close modal"
               >
@@ -396,7 +401,7 @@ const ApplicationsPage = () => {
               {/* Personal Info and Status Header - Adjusted for mobile */}
               <div className="flex flex-col-reverse md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-purple-100 mb-6">
                 {/* Status and Application Date - Top Right on Mobile, Right on Desktop */}
-                <div className="flex flex-col items-end w-full md:w-auto mb-4 md:mb-0 order-first md:order-none"> {/* Added order-first for mobile */}
+                <div className="flex flex-col items-end w-full md:w-auto mb-4 md:mb-0 order-first md:order-none">
                   <span className={`px-3 py-1.5 text-sm font-semibold rounded-full shadow-sm ${statusColors[selectedApp.status]}`}>
                     {selectedApp.status.toUpperCase()}
                   </span>
@@ -543,7 +548,7 @@ const ApplicationsPage = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"> {/* Changed to 2 columns */}
                   <button
                     onClick={() => updateStatus(selectedApp.id, 'approved', feedback)}
                     className="bg-green-600 text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors duration-200 shadow-md"
@@ -556,12 +561,7 @@ const ApplicationsPage = () => {
                   >
                     Reject
                   </button>
-                  <button
-                    onClick={() => updateStatus(selectedApp.id, 'onboarded', feedback)}
-                    className="bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition-colors duration-200 shadow-md"
-                  >
-                    Onboard
-                  </button>
+                  {/* Onboard button removed */}
                 </div>
               </div>
             </div>
