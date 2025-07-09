@@ -17,7 +17,7 @@ import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { collection, query, where, orderBy, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // <-- Import useRouter
+import { useRouter } from 'next/navigation';
 import { db, auth } from '@/lib/firebaseConfig';
 
 // --- Interfaces ---
@@ -100,7 +100,7 @@ const SignInPrompt = () => {
 
 
 export default function CampaignPage() {
-    const router = useRouter(); // <-- Initialize router
+    const router = useRouter();
     // --- State Declarations ---
     const [user, setUser] = useState<FirebaseAuthUser | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -152,67 +152,79 @@ export default function CampaignPage() {
         };
     };
 
+    // --- EFFECT 1: Handle Auth State ---
     useEffect(() => {
-        const fetchUserProfile = async (userId: string) => {
-            const userDocRef = doc(db, 'users', userId);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                const data = userDoc.data();
-                setUserProfile({
-                    name: data.name || "User",
-                    email: data.email || "N/A",
-                    profileImage: data.profileImage || null,
-                    accountType: data.accountType === 'creator' ? 'creator' : 'user',
-                    instagramUsername: data.instagramUsername || '',
-                    instagramProfile: data.instagramProfile || ''
-                });
-            } else {
-                setUserProfile({ name: "User", email: auth.currentUser?.email || "N/A", profileImage: null, accountType: 'user' });
-                console.warn("User document not found in Firestore.");
-            }
-        };
-
-        const fetchAppliedCampaigns = async (userId: string) => {
-            const q = query(collection(db, `users/${userId}/appliedCampaigns`));
-            const snapshot = await getDocs(q);
-            setAppliedCampaignIds(new Set(snapshot.docs.map(doc => doc.id)));
-        };
-
-        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+        setIsFirebaseLoading(true);
+        const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
-            if (currentUser) {
-                // Only set up listeners if user is logged in
-                await fetchUserProfile(currentUser.uid);
-                await fetchAppliedCampaigns(currentUser.uid);
-
-                const q = query(collection(db, "campaigns"), where("status", "==", "approved"), orderBy("createdAt", "desc"));
-                const unsubscribeCampaigns = onSnapshot(q, (snapshot) => {
-                    const campaigns = snapshot.docs.map(doc => mapFirestoreDocToCampaignUI(doc));
-                    setAllCampaigns(campaigns);
-                    setCampaignLoadError(null);
-                    setIsLoading(false);
-                }, (error) => {
-                    console.error("Campaign listener error:", error);
-                    setCampaignLoadError("Failed to load approved campaigns.");
-                    setIsLoading(false);
-                });
-                
-                // Return cleanup function for campaign listener
-                return () => unsubscribeCampaigns();
-            } else {
-                // Reset state for logged-out user
-                setUserProfile(null);
-                setAllCampaigns([]);
-                setAppliedCampaignIds(new Set());
-                setIsLoading(false); // Stop loading for unauthenticated view
-            }
-            setIsFirebaseLoading(false);
+            setIsFirebaseLoading(false); // Auth check is done
         });
-
-        // Return cleanup function for auth listener
         return () => unsubscribeAuth();
     }, []);
 
+    // --- EFFECT 2: Fetch Data for Logged-In User ---
+    useEffect(() => {
+        // If there is no user, clear data and do nothing.
+        if (!user) {
+            setAllCampaigns([]);
+            setAppliedCampaignIds(new Set());
+            setUserProfile(null);
+            setIsLoading(false); // Stop any loading state
+            return;
+        }
+
+        // A user is logged in, so start loading their data.
+        setIsLoading(true);
+
+        // Fetch non-realtime data first
+        const fetchUserData = async () => {
+            try {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userDoc = await getDoc(userDocRef);
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setUserProfile({
+                        name: data.name || "User", email: data.email || "N/A", profileImage: data.profileImage || null,
+                        accountType: data.accountType === 'creator' ? 'creator' : 'user',
+                        instagramUsername: data.instagramUsername || '', instagramProfile: data.instagramProfile || ''
+                    });
+                } else {
+                    setUserProfile({ name: "User", email: user.email || "N/A", profileImage: null, accountType: 'user' });
+                }
+
+                const appliedQ = query(collection(db, `users/${user.uid}/appliedCampaigns`));
+                const appliedSnapshot = await getDocs(appliedQ);
+                setAppliedCampaignIds(new Set(appliedSnapshot.docs.map(d => d.id)));
+
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+                toast.error("Could not load your profile data.");
+            }
+        };
+
+        fetchUserData();
+
+        // Now, set up the real-time listener for campaigns.
+        const q = query(collection(db, "campaigns"), where("status", "==", "approved"), orderBy("createdAt", "desc"));
+        const unsubscribeCampaigns = onSnapshot(q, (snapshot) => {
+            const campaigns = snapshot.docs.map(doc => mapFirestoreDocToCampaignUI(doc));
+            setAllCampaigns(campaigns);
+            setCampaignLoadError(null);
+            setIsLoading(false); // Data is loaded, stop skeleton loader
+        }, (error) => {
+            console.error("Campaign listener error:", error);
+            setCampaignLoadError("Failed to load approved campaigns.");
+            setIsLoading(false);
+        });
+
+        // Cleanup the listener when the user logs out or component unmounts
+        return () => {
+            unsubscribeCampaigns();
+        };
+
+    }, [user]); // This entire effect depends on the user object
+
+    // --- Component Functions ---
     const filteredAndSortedCampaigns = useMemo(() => {
         return allCampaigns
             .filter(c => c.name.toLowerCase().includes(nameFilter.toLowerCase()) && (platformFilter === 'all' || c.platform === platformFilter))
@@ -350,7 +362,6 @@ export default function CampaignPage() {
                         <p className="mt-2 text-lg text-gray-600">Connect with brands that match your audience</p>
                     </div>
                     <div className="flex gap-3">
-                        {/* --- MODIFIED: Create Campaign Button --- */}
                         <Button
                             className="flex items-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
                             onClick={() => user ? router.push('/campaign/create') : router.push('/signin')}
@@ -361,13 +372,11 @@ export default function CampaignPage() {
                     </div>
                 </div>
 
-                {/* --- MODIFIED: Campaign List or Sign-In Prompt --- */}
                 {!user ? (
                     <SignInPrompt />
                 ) : (
                     <>
                         {campaignLoadError && <div className="p-4 mb-6 text-red-700 bg-red-100 rounded-lg">{campaignLoadError}</div>}
-
                         <div className="flex flex-col gap-4 p-4 mb-6 bg-white rounded-xl shadow-md sm:flex-row">
                             <div className="relative flex-1">
                                 <Input type="text" placeholder="Search campaigns..." value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} className="pl-10" />
@@ -420,8 +429,8 @@ export default function CampaignPage() {
                             <Button variant="ghost" size="icon" onClick={() => setSelectedCampaign(null)} className="text-gray-500"><XIcon className="w-6 h-6" /></Button>
                         </div>
                         <div className="grid gap-6 mt-6 md:grid-cols-2">
-                             <div><h3 className="flex items-center text-lg font-semibold"><FileText className="w-5 h-5 mr-2 text-violet-500" />Description</h3><p className="mt-3 text-gray-600">{selectedCampaign.campaignDescription}</p></div>
-                             <div><h3 className="flex items-center text-lg font-semibold"><Sparkles className="w-5 h-5 mr-2 text-violet-500" />Requirements</h3><ul className="mt-3 space-y-2 text-gray-600"><li className="flex items-start"><BarChart2 className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Min. Followers: {selectedCampaign.minFollowers.toLocaleString()}</li><li className="flex items-start"><Cake className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Age: {selectedCampaign.minAge}-{selectedCampaign.maxAge} years</li><li className="flex items-start"><Users className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Gender: {selectedCampaign.gender}</li><li className="flex items-start"><MapPin className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Location: {selectedCampaign.location}</li><li className="flex items-start"><Hash className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" /><p className="text-sm text-gray-600">{selectedCampaign.creatorCategory}</p></li></ul></div>
+                            <div><h3 className="flex items-center text-lg font-semibold"><FileText className="w-5 h-5 mr-2 text-violet-500" />Description</h3><p className="mt-3 text-gray-600">{selectedCampaign.campaignDescription}</p></div>
+                            <div><h3 className="flex items-center text-lg font-semibold"><Sparkles className="w-5 h-5 mr-2 text-violet-500" />Requirements</h3><ul className="mt-3 space-y-2 text-gray-600"><li className="flex items-start"><BarChart2 className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Min. Followers: {selectedCampaign.minFollowers.toLocaleString()}</li><li className="flex items-start"><Cake className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Age: {selectedCampaign.minAge}-{selectedCampaign.maxAge} years</li><li className="flex items-start"><Users className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Gender: {selectedCampaign.gender}</li><li className="flex items-start"><MapPin className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Location: {selectedCampaign.location}</li><li className="flex items-start"><Hash className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" /><p className="text-sm text-gray-600">{selectedCampaign.creatorCategory}</p></li></ul></div>
                         </div>
                         <div className="p-4 mt-6 bg-violet-50 rounded-xl">
                             <h3 className="flex items-center text-lg font-semibold"><DollarSign className="w-5 h-5 mr-2 text-violet-500" />Budget & Deliverables</h3>
@@ -491,7 +500,7 @@ interface CampaignCardProps {
 }
 
 const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile, isApplied, isProcessing, onViewDetails, onApply, onUnapply, isExpanded, onToggleExpand }) => {
-    const router = useRouter(); // <-- Initialize router for the card component as well
+    const router = useRouter();
 
     const getStatusClasses = (status: string) => {
         switch (status) {

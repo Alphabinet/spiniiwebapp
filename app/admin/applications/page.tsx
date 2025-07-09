@@ -3,16 +3,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '@/lib/firebaseConfig';
 import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { format } from 'date-fns'; // Corrected import: ensure no '=' here
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Image from 'next/image';
-
-// --- Enhanced TypeScript Interfaces ---
-interface FirestoreTimestamp {
-  seconds: number;
-  nanoseconds: number;
-}
 
 interface CreatorApplication {
   id: string;
@@ -45,197 +39,138 @@ interface CreatorApplication {
     femalePercentage: number;
     topCities: string[];
   };
+  subscriptionStatus?: 'active' | 'inactive' | 'trial';
+  subscriptionExpiresAt?: FirestoreTimestamp;
 }
 
-// --- Helper Functions ---
-const formatDate = (timestamp: FirestoreTimestamp | null | undefined): string => {
-  if (!timestamp || typeof timestamp.seconds !== 'number') return 'N/A';
-  try {
-    return format(new Date(timestamp.seconds * 1000), 'MMM d, y, h:mm a');
-  } catch (error) {
-    console.error("Error formatting date:", error);
-    return 'Invalid Date';
-  }
-};
+interface FirestoreTimestamp {
+  seconds: number;
+  nanoseconds: number;
+}
 
-const formatCurrency = (amount: string | number): string => {
-  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0
-  }).format(isNaN(numericAmount) ? 0 : numericAmount);
-};
-
-const formatNumber = (num: string | number): string => {
-  const number = typeof num === 'string' ? parseFloat(num) : num;
-  return new Intl.NumberFormat('en-US').format(isNaN(number) ? 0 : number);
-};
-
-const calculateEngagementRate = (followers: string, avgViews: string): string => {
-  const followersNum = parseFloat(followers) || 1;
-  const viewsNum = parseFloat(avgViews) || 0;
-  return ((viewsNum / followersNum) * 100).toFixed(2) + '%';
-};
-
-// --- Main Component ---
 const ApplicationsPage = () => {
   const [applications, setApplications] = useState<CreatorApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedApplication, setSelectedApplication] = useState<CreatorApplication | null>(null);
+  const [selectedApp, setSelectedApp] = useState<CreatorApplication | null>(null);
   const [feedback, setFeedback] = useState('');
-  const [showFeedbackError, setShowFeedbackError] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | CreatorApplication['status']>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [updating, setUpdating] = useState(false);
   const itemsPerPage = 8;
 
-  // Fetch applications from Firestore
+  const formatDate = useCallback((timestamp: FirestoreTimestamp | null | undefined): string => {
+    if (!timestamp?.seconds) return 'N/A';
+    try {
+      return format(timestamp.seconds * 1000, 'MMM d, y, h:mm a');
+    } catch {
+      return 'Invalid Date';
+    }
+  }, []);
+
+  const formatCurrency = useCallback((amount: string | number): string => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
+    }).format(isNaN(num) ? 0 : num);
+  }, []);
+
   useEffect(() => {
-    const fetchApplications = async () => {
-      setLoading(true);
+    const fetchData = async () => {
       try {
         const q = query(
           collection(db, "creatorApplications"),
           orderBy("timestamp", "desc")
         );
-        const querySnapshot = await getDocs(q);
-        const appsData = querySnapshot.docs.map(doc => ({
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         } as CreatorApplication));
-        setApplications(appsData);
+        setApplications(data);
       } catch (error) {
-        console.error("Error fetching applications:", error);
         toast.error("Failed to load applications");
       } finally {
         setLoading(false);
       }
     };
-    fetchApplications();
+    fetchData();
   }, []);
 
-  // Update application status
-  const updateApplicationStatus = useCallback(async (
+  const updateStatus = useCallback(async (
     appId: string,
-    newStatus: CreatorApplication['status'],
+    status: CreatorApplication['status'],
     feedbackText: string
   ) => {
-    if (!db) return;
-
-    const applicationToUpdate = applications.find(app => app.id === appId);
-    if (!applicationToUpdate) return;
-
-    // Validate feedback for rejection
-    if (newStatus === 'rejected' && feedbackText.trim() === '') {
-      setShowFeedbackError(true);
+    if (status === 'rejected' && !feedbackText.trim()) {
+      toast.error("Feedback required for rejection");
       return;
     }
 
-    setUpdating(true);
     try {
-      const appRef = doc(db, "creatorApplications", appId);
-      await updateDoc(appRef, {
-        status: newStatus,
+      await updateDoc(doc(db, "creatorApplications", appId), {
+        status,
         adminFeedback: feedbackText,
         updatedAt: new Date(),
       });
 
-      // Update local state
       setApplications(prev => prev.map(app =>
-        app.id === appId ? { ...app, status: newStatus, adminFeedback: feedbackText } : app
+        app.id === appId ? { ...app, status, adminFeedback: feedbackText } : app
       ));
 
-      // Send notification to creator
-      const notificationMessage = newStatus === 'approved'
-        ? `Congratulations! Your creator application has been approved. You can now start receiving bookings.`
-        : `Your creator application has been reviewed. Status: ${newStatus}. Feedback: ${feedbackText}`;
-
-      // This __app_id global might not be defined. Using a fallback.
-      const appIdGlobal = typeof window !== 'undefined' && typeof (window as any).__app_id !== 'undefined' ? (window as any).__app_id : 'default-app-id';
-
-      // Ensure the path to notifications is correct, assuming it's under user specific.
-      await addDoc(collection(db, `users/${applicationToUpdate.userId}/notifications`), {
-        message: notificationMessage,
+      await addDoc(collection(db, `users/${selectedApp?.userId}/notifications`), {
+        message: status === 'approved'
+          ? "Your application has been approved!"
+          : `Application ${status}. Feedback: ${feedbackText}`,
         read: false,
         timestamp: new Date(),
-        type: 'application_status',
-        link: '/creator-dashboard'
+        type: 'application_status'
       });
 
-      toast.success(`Application ${newStatus} successfully`);
-      setSelectedApplication(null);
-      setFeedback('');
-      setShowFeedbackError(false);
+      toast.success(`Application ${status}`);
+      setSelectedApp(null);
     } catch (error) {
-      console.error("Error updating application: ", error);
-      toast.error("Failed to update application");
-    } finally {
-      setUpdating(false);
+      toast.error("Update failed");
     }
-  }, [applications]);
+  }, [selectedApp]);
 
-  // Filter and pagination logic
-  const filteredApplications = useMemo(() => {
-    let result = applications;
+  const { filteredApps, totalPages, paginatedApps } = useMemo(() => {
+    let filtered = applications;
 
-    // Apply status filter
     if (statusFilter !== 'all') {
-      result = result.filter(app => app.status === statusFilter);
+      filtered = filtered.filter(app => app.status === statusFilter);
     }
 
-    // Apply search term
     if (searchTerm) {
-      const lowercasedTerm = searchTerm.toLowerCase();
-      result = result.filter(app =>
-        app.fullName.toLowerCase().includes(lowercasedTerm) ||
-        app.emailAddress.toLowerCase().includes(lowercasedTerm) ||
-        app.instagramUsername.toLowerCase().includes(lowercasedTerm) ||
-        app.contentCategory.toLowerCase().includes(lowercasedTerm) ||
-        app.cityState.toLowerCase().includes(lowercasedTerm)
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(app =>
+        app.fullName.toLowerCase().includes(term) ||
+        app.emailAddress.toLowerCase().includes(term) ||
+        app.instagramUsername.toLowerCase().includes(term)
       );
     }
 
-    return result;
-  }, [applications, searchTerm, statusFilter]);
+    const total = Math.ceil(filtered.length / itemsPerPage);
+    const start = (currentPage - 1) * itemsPerPage;
+    const paginated = filtered.slice(start, start + itemsPerPage);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredApplications.length / itemsPerPage);
-  const paginatedApplications = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredApplications.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredApplications, currentPage, itemsPerPage]);
+    return { filteredApps: filtered, totalPages: total, paginatedApps: paginated };
+  }, [applications, searchTerm, statusFilter, currentPage]);
 
-  // Status badge styling
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      case 'onboarded': return 'bg-purple-100 text-purple-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const statusColors = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    approved: 'bg-emerald-100 text-emerald-800',
+    rejected: 'bg-rose-100 text-rose-800',
+    onboarded: 'bg-purple-100 text-purple-800'
   };
-
-  const handleReviewClick = (app: CreatorApplication) => {
-    setSelectedApplication(app);
-    setFeedback(app.adminFeedback || '');
-    setShowFeedbackError(false);
-  };
-
-  // Engagement metrics
-  const engagementMetrics = (app: CreatorApplication) => ({
-    reelEngagement: calculateEngagementRate(app.totalFollowers, app.avgReelViews),
-    storyEngagement: calculateEngagementRate(app.totalFollowers, app.storyAverageViews)
-  });
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="flex flex-col items-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600 mb-4"></div>
-          <p className="text-gray-700 text-lg">Loading creator applications...</p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="text-center text-gray-700">
+          <div className="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-indigo-600 mx-auto mb-6" />
+          <p className="text-xl font-semibold">Loading creator applications...</p>
         </div>
       </div>
     );
@@ -245,511 +180,387 @@ const ApplicationsPage = () => {
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <ToastContainer position="bottom-right" autoClose={3000} />
 
-      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
-        {/* Header Section */}
-        <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
-            <div className="w-full md:w-auto">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Creator Applications</h1>
-              <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
-                Review and manage creator applications. Found {filteredApplications.length} of {applications.length} total.
-              </p>
+      {/* Header Section */}
+      <div className="bg-white rounded-2xl shadow-lg p-5 mb-8 border border-gray-200">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Creator Applications</h1>
+            <p className="text-gray-700 text-lg">
+              {filteredApps.length} of {applications.length} applications
+            </p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {['all', 'pending', 'approved', 'rejected'].map(status => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status as 'all' | CreatorApplication['status'])}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${statusFilter === status
-                      ? 'bg-indigo-600 text-white shadow-sm'
+            <div className="flex flex-wrap gap-3 mt-4">
+              {['all', 'pending', 'approved', 'rejected', 'onboarded'].map(status => (
+                <button
+                  key={status}
+                  onClick={() => {
+                    setStatusFilter(status as any);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
+                    ${statusFilter === status
+                      ? 'bg-indigo-600 text-white shadow-md'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      }`}
-                  >
-                    {status === 'all' ? 'All Statuses' : status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="w-full md:w-72 space-y-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search creators..."
-                  className="w-full rounded-xl border border-gray-300 py-2.5 px-4 pl-11 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+                    }`}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-
-              <div className="text-xs text-gray-500 flex justify-between">
-                <span>Sort by: Newest first</span>
-                <span>Page {currentPage} of {totalPages}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Applications List/Table */}
-        <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Creator</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Platform</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Metrics</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Category</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Submitted</th>
-                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedApplications.length > 0 ? paginatedApplications.map((app) => {
-                  const metrics = engagementMetrics(app);
-                  return (
-                    <tr key={app.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <Image
-                              src={app.profilePictureUrl || '/default-avatar.png'}
-                              alt={app.fullName}
-                              width={40}
-                              height={40}
-                              className="rounded-full object-cover"
-                            />
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{app.fullName}</div>
-                            <div className="text-xs text-gray-500">{app.cityState}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="bg-pink-100 rounded-full p-1 mr-2">
-                            <svg
-                              className="h-4 w-4 text-pink-600"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              viewBox="0 0 24 24"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-                              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                              <line x1="17.5" y1="6.5" x2="17.5" y2="6.5" />
-                            </svg>
-                          </div>
-                          <div>
-                            <a
-                              href={app.instagramProfileLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-indigo-600 hover:underline"
-                            >
-                              @{app.instagramUsername}
-                            </a>
-                            <div className="text-xs text-gray-500">{formatNumber(app.totalFollowers)} followers</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">
-                          <div>Reels: {formatNumber(app.avgReelViews)}</div>
-                          <div>Engagement: {metrics.reelEngagement}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{app.contentCategory}</div>
-                        <div className="text-xs text-gray-500">{app.contentLanguages}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(app.timestamp)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(app.status)}`}>
-                          {app.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleReviewClick(app)}
-                          className="text-indigo-600 hover:text-indigo-900 font-medium px-3 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
-                        >
-                          Review
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                }) : (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
-                      <div className="text-gray-500 flex flex-col items-center justify-center">
-                        <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-lg">No applications found</p>
-                        <p className="mt-1 text-sm max-w-md">
-                          Try adjusting your search or filter criteria. No creator applications match your current settings.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="md:hidden p-4 space-y-4">
-            {paginatedApplications.length > 0 ? paginatedApplications.map((app) => {
-              const metrics = engagementMetrics(app);
-              return (
-                <div key={app.id} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 mr-3">
-                        <Image
-                          src={app.profilePictureUrl || '/default-avatar.png'}
-                          alt={app.fullName}
-                          width={48}
-                          height={48}
-                          className="rounded-full object-cover"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-gray-900">{app.fullName}</h3>
-                        <p className="text-xs text-gray-500">{app.cityState}</p>
-                      </div>
-                    </div>
-                    <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full capitalize ${getStatusColor(app.status)}`}>
-                      {app.status}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm text-gray-700 mb-4">
-                    <p>
-                      <span className="font-medium">Instagram:</span>{' '}
-                      <a
-                        href={app.instagramProfileLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-600 hover:underline"
-                      >
-                        @{app.instagramUsername}
-                      </a> ({formatNumber(app.totalFollowers)} followers)
-                    </p>
-                    <p><span className="font-medium">Reel Avg. Views:</span> {formatNumber(app.avgReelViews)} ({metrics.reelEngagement})</p>
-                    <p><span className="font-medium">Category:</span> {app.contentCategory}</p>
-                    <p><span className="font-medium">Applied:</span> {formatDate(app.timestamp)}</p>
-                  </div>
-
-                  <button
-                    onClick={() => handleReviewClick(app)}
-                    className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
-                  >
-                    Review Application
-                  </button>
-                </div>
-              );
-            }) : (
-              <div className="px-6 py-12 text-center">
-                <div className="text-gray-500 flex flex-col items-center justify-center">
-                  <svg className="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-lg">No applications found</p>
-                  <p className="mt-1 text-sm max-w-md">
-                    Try adjusting your search or filter criteria. No creator applications match your current settings.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="bg-gray-50 px-4 py-3 sm:px-6 flex items-center justify-between border-t border-gray-200 flex-col sm:flex-row gap-3">
-              <div className="text-sm text-gray-700">
-                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{' '}
-                <span className="font-medium">{Math.min(currentPage * itemsPerPage, filteredApplications.length)}</span> of{' '}
-                <span className="font-medium">{filteredApplications.length}</span> results
-              </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
-                >
-                  Previous
+                  {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
                 </button>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className={`px-4 py-2 text-sm rounded-lg ${currentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'}`}
-                >
-                  Next
-                </button>
-              </div>
+              ))}
             </div>
-          )}
+          </div>
+
+          <div className="w-full md:w-80 relative">
+            <input
+              type="text"
+              placeholder="Search by name, email, or Instagram..."
+              className="w-full rounded-full border border-gray-300 pl-12 pr-5 py-3 text-base text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all duration-300 shadow-sm"
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+            <svg
+              className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-500"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* Application Detail Modal */}
-      {selectedApplication && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => !updating && setSelectedApplication(null)}>
-          <div
-            className="bg-white rounded-none sm:rounded-2xl shadow-xl w-full h-full sm:max-h-[90vh] sm:max-w-4xl overflow-y-auto flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 sm:p-6 flex-grow overflow-y-auto"> {/* Added flex-grow and overflow for content scrolling */}
-              {/* Modal Header */}
-              <div className="flex justify-between items-start mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-gray-200">
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900">Creator Application Review</h3>
-                  <p className="text-gray-600 mt-1 text-sm sm:text-base">Detailed information and review tools</p>
-                </div>
-                <button
-                  onClick={() => !updating && setSelectedApplication(null)}
-                  disabled={updating}
-                  className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors p-1"
-                  aria-label="Close modal"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Creator Profile Section */}
-              <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8 items-center md:items-start text-center md:text-left">
-                <div className="flex-shrink-0">
-                  <Image
-                    src={selectedApplication.profilePictureUrl || '/default-avatar.png'}
-                    alt={selectedApplication.fullName}
-                    width={120}
-                    height={120}
-                    className="rounded-xl object-cover border border-gray-200 w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40"
-                  />
-                </div>
-                <div className="flex-grow w-full">
-                  <div className="flex flex-col md:flex-row justify-between items-center md:items-start">
-                    <div className="mb-3 md:mb-0">
-                      <h4 className="text-xl sm:text-2xl font-bold text-gray-900">{selectedApplication.fullName}</h4>
-                      <div className="flex items-center justify-center md:justify-start mt-2">
-                        <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusColor(selectedApplication.status)}`}>
-                          {selectedApplication.status}
-                        </span>
-                        <span className="ml-2 sm:ml-3 text-xs sm:text-sm text-gray-600">
-                          Applied on {formatDate(selectedApplication.timestamp)}
-                        </span>
-                      </div>
+      {/* Applications Table (Desktop) */}
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden hidden md:block border border-gray-200 mb-8">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Creator</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Platform</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Metrics</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-800 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-800 uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {paginatedApps.length > 0 ? paginatedApps.map(app => (
+              <tr key={app.id} className="hover:bg-gray-50 transition-colors duration-200">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <Image
+                      src={app.profilePictureUrl || '/default-avatar.png'}
+                      alt={app.fullName}
+                      width={48}
+                      height={48}
+                      className="rounded-full object-cover border-2 border-gray-300 shadow-sm"
+                    />
+                    <div className="ml-4">
+                      <div className="font-semibold text-gray-900">{app.fullName}</div>
+                      <div className="text-sm text-gray-600">{app.emailAddress}</div>
                     </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-gray-700">
+                  <a
+                    href={app.instagramProfileLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 hover:underline flex items-center text-sm"
+                  >
+                    @{app.instagramUsername}
+                  </a>
+                  <div className="text-sm text-gray-500">{app.totalFollowers} followers</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                  <div>Reels: <span className="font-medium">{app.avgReelViews}</span></div>
+                  <div>Stories: <span className="font-medium">{app.storyAverageViews}</span></div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusColors[app.status]}`}>
+                    {app.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    onClick={() => setSelectedApp(app)}
+                    className="text-indigo-600 hover:text-indigo-800 transition-colors duration-200"
+                  >
+                    Review
+                  </button>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-500 text-lg">
+                  No applications found matching your criteria.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-6 mt-6 mb-8">
+        {paginatedApps.length > 0 ? paginatedApps.map(app => (
+          <div key={app.id} className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center">
+                <Image
+                  src={app.profilePictureUrl || '/default-avatar.png'}
+                  alt={app.fullName}
+                  width={64}
+                  height={64}
+                  className="rounded-full object-cover border-2 border-gray-300 shadow-sm"
+                />
+                <div className="ml-4">
+                  <div className="font-bold text-lg text-gray-900">{app.fullName}</div>
+                  <div className="text-sm text-gray-600">@{app.instagramUsername}</div>
+                </div>
+              </div>
+              <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusColors[app.status]}`}>
+                {app.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
+              <div><span className="font-semibold">Followers:</span> {app.totalFollowers}</div>
+              <div><span className="font-semibold">Reel Views:</span> {app.avgReelViews}</div>
+              <div className="col-span-2"><span className="font-semibold">Story Views:</span> {app.storyAverageViews}</div>
+            </div>
+
+            <button
+              onClick={() => setSelectedApp(app)}
+              className="w-full mt-4 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 transition-colors duration-200 shadow-md"
+            >
+              Review Application
+            </button>
+          </div>
+        )) : (
+          <div className="text-center py-10 text-gray-500 text-lg bg-white rounded-xl shadow-lg border border-gray-200">
+            No applications found matching your criteria.
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between border-t border-gray-200 px-4 py-4 mt-8 bg-white rounded-2xl shadow-lg">
+          <div className="text-sm text-gray-700 mb-3 sm:mb-0">
+            Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span>
+          </div>
+          <div className="flex space-x-3">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => p - 1)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+            >
+              Previous
+            </button>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => p + 1)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Application Modal */}
+      {selectedApp && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4 sm:p-6 animate-fade-in">
+          <div
+            className="bg-white rounded-2xl max-w-5xl w-full max-h-[95vh] overflow-auto shadow-2xl transform scale-95 md:scale-100 transition-transform duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-purple-700 to-indigo-600 text-white p-5 rounded-t-2xl flex justify-between items-center shadow-md">
+              <h3 className="text-2xl font-bold">Review Creator Application</h3>
+              <button
+                onClick={() => setSelectedApp(null)}
+                className="text-white hover:text-purple-100 text-2xl p-1 rounded-full hover:bg-purple-800 transition-colors duration-200"
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5 sm:p-8 space-y-6">
+
+              {/* Personal Info and Status Header - Adjusted for mobile */}
+              <div className="flex flex-col-reverse md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-purple-100 mb-6">
+                {/* Status and Application Date - Top Right on Mobile, Right on Desktop */}
+                <div className="flex flex-col items-end w-full md:w-auto mb-4 md:mb-0 order-first md:order-none"> {/* Added order-first for mobile */}
+                  <span className={`px-3 py-1.5 text-sm font-semibold rounded-full shadow-sm ${statusColors[selectedApp.status]}`}>
+                    {selectedApp.status.toUpperCase()}
+                  </span>
+                  <span className="mt-2 text-xs text-purple-600">
+                    Applied On: <span className="font-medium">{formatDate(selectedApp.timestamp)}</span>
+                  </span>
+                </div>
+
+                {/* Profile Picture, Name, Instagram, Gender - Left on Desktop, Stacked on Mobile (below status) */}
+                <div className="flex items-center gap-5 w-full md:w-auto">
+                  <Image
+                    src={selectedApp.profilePictureUrl || '/default-avatar.png'}
+                    alt={selectedApp.fullName}
+                    width={100}
+                    height={100}
+                    className="rounded-full object-cover border-4 border-purple-400 shadow-md flex-shrink-0"
+                  />
+                  <div className="flex-grow text-right">
+                    <h4 className="text-2xl font-bold text-purple-900 mb-0.5">{selectedApp.fullName}</h4>
+                    <p className="text-sm text-purple-600 mb-0.5">Gender: <span className="font-medium">{selectedApp.gender || 'N/A'}</span></p>
                     <a
-                      href={selectedApplication.instagramProfileLink}
+                      href={selectedApp.instagramProfileLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center text-indigo-600 hover:text-indigo-800 font-medium text-sm sm:text-base"
+                      className="text-purple-700 hover:text-purple-900 hover:underline text-base font-medium inline-flex items-center"
                     >
-                      <svg className="h-4 w-4 sm:h-5 sm:w-5 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C15.9 2 19 5.1 19 9c0 5.3-7 13-7 13S5 14.3 5 9c0-3.9 3.1-7 7-7zm0 9c1.7 0 3-1.3 3-3s-1.3-3-3-3-3 1.3-3 3 1.3 3 3 3z" />
+                      @{selectedApp.instagramUsername}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      @{selectedApplication.instagramUsername}
                     </a>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                    <div>
-                      <p className="text-xs sm:text-sm text-gray-500">Contact</p>
-                      <p className="font-medium text-sm sm:text-base">{selectedApplication.emailAddress}</p>
-                      <p className="font-medium text-sm sm:text-base">{selectedApplication.mobileNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs sm:text-sm text-gray-500">Location</p>
-                      <p className="font-medium text-sm sm:text-base">{selectedApplication.cityState}</p>
-                      <p className="capitalize text-sm sm:text-base">{selectedApplication.gender}</p>
-                    </div>
+                    <p className="text-sm text-purple-500 mt-1">{selectedApp.cityState}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Stats - Always stacked vertically */}
-              <div className="mb-6 sm:mb-8">
-                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Engagement Metrics</h4>
-                <div className="grid grid-cols-1 gap-4"> {/* Always 1 column */}
-                  {/* Followers */}
-                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 text-center">
-                    <p className="text-sm text-blue-800 font-medium">Followers</p>
-                    <p className="text-xl sm:text-2xl font-bold text-blue-900">{formatNumber(selectedApplication.totalFollowers)}</p>
+              {/* Contact Details */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100 mb-6">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Contact Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Email Address</p>
+                    <p className="font-medium text-purple-900 text-base">{selectedApp.emailAddress}</p>
                   </div>
-                  {/* Avg. Reel Views */}
-                  <div className="bg-purple-50 rounded-xl p-4 border border-purple-100 text-center">
-                    <p className="text-sm text-purple-800 font-medium">Avg. Reel Views</p>
-                    <p className="text-xl sm:text-2xl font-bold text-purple-900">{formatNumber(selectedApplication.avgReelViews)}</p>
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Mobile Number</p>
+                    <p className="font-medium text-purple-900 text-base">{selectedApp.mobileNumber}</p>
                   </div>
-                  {/* Engagement Rate */}
-                  <div className="bg-pink-50 rounded-xl p-4 border border-pink-100 text-center">
-                    <p className="text-sm text-pink-800 font-medium">Engagement Rate</p>
-                    <p className="text-xl sm:text-2xl font-bold text-pink-900">
-                      {calculateEngagementRate(selectedApplication.totalFollowers, selectedApplication.avgReelViews)}
+                </div>
+              </div>
+
+              {/* Content & Service Details */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100 mb-6">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Content & Service Details</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Content Category</p>
+                    <p className="font-medium text-purple-900 text-base">{selectedApp.contentCategory || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Content Languages</p>
+                    <p className="font-medium text-purple-900 text-base">{selectedApp.contentLanguages || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Delivery Duration</p>
+                    <p className="font-medium text-purple-900 text-base">{selectedApp.deliveryDuration || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Subscription Details */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100 mb-6">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Subscription Details</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Subscription Status</p>
+                    <p className={`font-medium text-base capitalize ${selectedApp.subscriptionStatus === 'active' ? 'text-emerald-700' : selectedApp.subscriptionStatus === 'inactive' ? 'text-rose-700' : 'text-purple-800'}`}>
+                      {selectedApp.subscriptionStatus || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-500 mb-0.5">Expires At</p>
+                    <p className="font-medium text-purple-900 text-base">
+                      {formatDate(selectedApp.subscriptionExpiresAt) || 'N/A'}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Pricing Section - Always stacked vertically */}
-              <div className="mb-6 sm:mb-8">
-                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Pricing & Delivery</h4>
-                <div className="grid grid-cols-1 gap-4"> {/* Always 1 column */}
-                  {/* Reel Price */}
-                  <div className="border rounded-lg p-4 text-center">
-                    <p className="text-sm text-gray-500">Reel Price</p>
-                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.reelPrice)}</p>
+              {/* Stats Grid */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100 mb-6">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Engagement Metrics</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Total Followers</p>
+                    <p className="font-bold text-xl text-purple-900">{selectedApp.totalFollowers}</p>
                   </div>
-                  {/* Story Price */}
-                  <div className="border rounded-lg p-4 text-center">
-                    <p className="text-sm text-gray-500">Story Price</p>
-                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.storyPrice)}</p>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Avg. Reel Views</p>
+                    <p className="font-bold text-xl text-purple-900">{selectedApp.avgReelViews}</p>
                   </div>
-                  {/* Reel + Story Price */}
-                  <div className="border rounded-lg p-4 text-center">
-                    <p className="text-sm text-gray-500">Reel + Story Price</p>
-                    <p className="text-lg sm:text-xl font-bold">{formatCurrency(selectedApplication.reelsStoryPrice)}</p>
-                  </div>
-                  {/* Delivery Timeframe */}
-                  <div className="border rounded-lg p-4 text-center">
-                    <p className="text-sm text-gray-500">Delivery Timeframe</p>
-                    <p className="font-medium text-lg sm:text-xl">{selectedApplication.deliveryDuration} days</p>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Avg. Story Views</p>
+                    <p className="font-bold text-xl text-purple-900">{selectedApp.storyAverageViews}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Content Details */}
-              <div className="mb-6 sm:mb-8">
-                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Content Details</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="text-center sm:text-left">
-                    <p className="text-sm text-gray-500">Content Category</p>
-                    <p className="font-medium text-sm sm:text-base">{selectedApplication.contentCategory}</p>
+              {/* Pricing Details */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100 mb-6">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Quoted Prices</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-center">
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Reel Price</p>
+                    <p className="font-bold text-xl text-purple-900">{formatCurrency(selectedApp.reelPrice)}</p>
                   </div>
-                  <div className="text-center sm:text-left">
-                    <p className="text-sm text-gray-500">Languages</p>
-                    <p className="font-medium text-sm sm:text-base">{selectedApplication.contentLanguages}</p>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Story Price</p>
+                    <p className="font-bold text-xl text-purple-900">{formatCurrency(selectedApp.storyPrice)}</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-purple-200">
+                    <p className="text-sm text-purple-500 mb-1">Reel + Story Combo</p>
+                    <p className="font-bold text-xl text-purple-900">{formatCurrency(selectedApp.reelsStoryPrice)}</p>
                   </div>
                 </div>
-
-                {selectedApplication.portfolioLinks && selectedApplication.portfolioLinks.length > 0 && (
-                  <div className="mt-4 text-center sm:text-left">
-                    <p className="text-sm text-gray-500">Portfolio Links</p>
-                    <div className="flex flex-wrap gap-2 mt-2 justify-center sm:justify-start">
-                      {selectedApplication.portfolioLinks.map((link, index) => (
-                        <a
-                          key={index}
-                          href={link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:underline text-sm bg-indigo-50 px-3 py-1.5 rounded-lg"
-                        >
-                          Portfolio {index + 1}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedApplication.previousBrandCollabs && (
-                  <div className="mt-4 text-center sm:text-left">
-                    <p className="text-sm text-gray-500">Previous Brand Collaborations</p>
-                    <p className="font-medium text-sm sm:text-base">{selectedApplication.previousBrandCollabs}</p>
-                  </div>
-                )}
               </div>
 
-              {/* Admin Actions - Always stacked vertically */}
-              <div className="bg-gray-50 rounded-xl p-4 sm:p-6 border border-gray-200">
-                <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Review Actions</h4>
-
-                <div className="mb-4">
-                  <label htmlFor="feedback" className="block text-sm font-medium text-gray-700 mb-2">
-                    Application Feedback
-                    <span className="text-red-500">*</span> <span className="text-gray-500 text-xs sm:text-sm font-normal">(required for rejection)</span>
+              {/* Admin Actions */}
+              <div className="bg-purple-50 rounded-lg p-5 shadow-inner border border-purple-100">
+                <h4 className="font-bold text-lg text-purple-800 mb-3">Admin Actions</h4>
+                <div className="mb-5">
+                  <label htmlFor="admin-feedback" className="block text-base font-medium text-purple-800 mb-2">
+                    Feedback
+                    {selectedApp.status === 'rejected' && (
+                      <span className="text-rose-500 ml-1 text-sm">*Required for rejection</span>
+                    )}
                   </label>
                   <textarea
-                    id="feedback"
+                    id="admin-feedback"
                     value={feedback}
-                    onChange={(e) => {
-                      setFeedback(e.target.value);
-                      if (showFeedbackError) setShowFeedbackError(false);
-                    }}
-                    className="w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3 text-sm min-h-[100px]"
-                    placeholder="Provide constructive feedback for the creator..."
+                    onChange={e => setFeedback(e.target.value)}
+                    className="w-full border border-purple-300 rounded-lg p-3 text-purple-800 placeholder-purple-400 focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all duration-300 min-h-[100px] resize-y"
+                    placeholder="Enter feedback for the creator..."
                   />
-                  {showFeedbackError && (
-                    <p className="mt-2 text-sm text-red-600">Feedback is required when rejecting an application</p>
-                  )}
                 </div>
 
-                <div className="flex flex-col gap-3"> {/* Changed from sm:flex-row to flex-col */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
-                    onClick={() => updateApplicationStatus(selectedApplication.id, 'approved', feedback)}
-                    disabled={updating}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
+                    onClick={() => updateStatus(selectedApp.id, 'approved', feedback)}
+                    className="bg-green-600 text-white py-2.5 rounded-lg font-semibold hover:bg-emerald-700 transition-colors duration-200 shadow-md"
                   >
-                    {updating ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Approving...
-                      </>
-                    ) : 'Approve Application'}
+                    Approve
                   </button>
-
                   <button
-                    onClick={() => updateApplicationStatus(selectedApplication.id, 'rejected', feedback)}
-                    disabled={updating}
-                    className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
+                    onClick={() => updateStatus(selectedApp.id, 'rejected', feedback)}
+                    className="bg-rose-600 text-white py-2.5 rounded-lg font-semibold hover:bg-rose-700 transition-colors duration-200 shadow-md"
                   >
-                    {updating ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Rejecting...
-                      </>
-                    ) : 'Reject Application'}
+                    Reject
                   </button>
-
                   <button
-                    onClick={() => updateApplicationStatus(selectedApplication.id, 'onboarded', feedback)}
-                    disabled={updating}
-                    className="flex-1 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center justify-center disabled:opacity-70 text-sm sm:text-base"
+                    onClick={() => updateStatus(selectedApp.id, 'onboarded', feedback)}
+                    className="bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition-colors duration-200 shadow-md"
                   >
-                    {updating ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Onboarding...
-                      </>
-                    ) : 'Mark as Onboarded'}
+                    Onboard
                   </button>
                 </div>
               </div>

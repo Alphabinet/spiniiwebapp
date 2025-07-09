@@ -6,7 +6,9 @@ import { auth, db } from "@/lib/firebaseConfig";
 import { collection, query, where, onSnapshot, DocumentData, doc, setDoc, updateDoc, serverTimestamp, orderBy, Timestamp, FieldValue } from "firebase/firestore";
 import Link from "next/link";
 import { User as FirebaseUser } from "firebase/auth";
+import { UsersIcon, PlayIcon, EyeIcon } from '@heroicons/react/24/outline'; // Importing specific icons from Heroicons
 import Image from "next/image";
+import React from 'react'; // Ensure React is imported as it's used for JSX
 
 // --- Type Definitions ---
 interface Activity {
@@ -24,7 +26,23 @@ interface UserData {
     userId?: string;
     accountType?: 'normal' | 'creator';
     updatedAt?: Timestamp | FieldValue;
-    createdAt?: Timestamp | FieldValue;
+    createdAt?: Timestamp | FieldValue; // Corrected Field to FieldValue
+}
+
+// Define the CreatorData interface based on your Firestore structure
+interface CreatorData extends DocumentData {
+    profilePictureUrl?: string;
+    fullName: string;
+    instagramProfileLink: string;
+    instagramUsername: string;
+    totalFollowers?: string | number;
+    avgReelViews?: string | number;
+    storyAverageViews?: string | number;
+    status: 'pending' | 'approved' | 'rejected';
+    timestamp?: Timestamp;
+    updatedAt?: Timestamp;
+    subscriptionStatus?: 'active' | 'inactive';
+    subscriptionExpiresAt?: Timestamp;
 }
 
 // --- Helper Components & Functions ---
@@ -35,14 +53,14 @@ const formatDate = (timestamp: Timestamp | null | undefined) => {
     return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 };
 
-function InfoCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
+function InfoCard({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) {
     return (
-        <div className="bg-purple-50 p-4 rounded-xl flex items-center gap-4">
-            <div className="bg-purple-200 text-purple-700 p-2 rounded-lg">
+        <div className="flex items-center space-x-3 p-4 bg-purple-100 rounded-lg">
+            <div className="text-gray-700 flex-shrink-0">
                 {icon}
             </div>
             <div>
-                <p className="text-sm text-purple-900 font-medium">{title}</p>
+                <p className="text-sm text-gray-500">{title}</p>
                 <p className="text-lg font-bold text-purple-900">{value}</p>
             </div>
         </div>
@@ -87,8 +105,8 @@ function MobileNumberPrompt({ onSave }: { onSave: (mobileNumber: string) => Prom
     };
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50 p-4">
+            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
                 <div className="mb-4 text-5xl">📱</div>
                 <h2 className="text-2xl font-bold text-gray-900">Complete Your Profile</h2>
                 <p className="text-gray-600 mt-2 mb-6">Please provide your mobile number to continue. This is required to use all features of your account.</p>
@@ -192,7 +210,11 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
     };
 
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div></div>;
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
+            </div>
+        );
     }
 
     if (isMobileNumberMissing) {
@@ -209,8 +231,8 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
     );
 
     return (
-        <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white p-8 rounded-2xl shadow-lg border">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                 <div className="flex items-center gap-3 mb-6">
                     <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
                     <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold uppercase tracking-wider">Normal User</span>
@@ -243,8 +265,8 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
                             </select>
                         </div>
                     </div>
-                    <div className="flex items-center justify-between pt-4">
-                        <button type="submit" disabled={isSaving} className="px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
+                    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4">
+                        <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
                             {isSaving ? "Saving..." : "Update Application"}
                         </button>
                         {successMessage && <p className="text-green-600 text-sm font-medium">{successMessage}</p>}
@@ -280,7 +302,6 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
                     <FeatureListItem>Dedicated manager support 24/7</FeatureListItem>
                     <FeatureListItem>Priority access to new campaigns</FeatureListItem>
                 </ul>
-                {/* Updated link and text */}
                 <Link href="/dashboard/profile" className="w-full">
                     <span className="block w-full text-center px-8 py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-all duration-300 transform hover:scale-105 shadow-lg">
                         Become Creator
@@ -294,10 +315,10 @@ function NormalUserProfile({ user }: { user: FirebaseUser }) {
     );
 }
 
-// --- Main Page Component ---
+// --- Main OverviewPage Component ---
 export default function OverviewPage() {
     const [user] = useAuthState(auth);
-    const [creatorData, setCreatorData] = useState<DocumentData | null>(null);
+    const [creatorData, setCreatorData] = useState<CreatorData | null>(null);
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
     const [bookings, setBookings] = useState<DocumentData[]>([]);
@@ -309,39 +330,37 @@ export default function OverviewPage() {
             return;
         }
 
-        // Fetch Creator Application Data and Update User Record
         const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid));
         const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
             const userDocRef = doc(db, "users", user.uid);
             if (!snapshot.empty) {
-                // --- Creator User Logic ---
-                const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+                const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as CreatorData;
                 setCreatorData(data);
 
-                // **NEW: Update the 'users' collection for the creator**
                 try {
                     await updateDoc(userDocRef, {
                         accountType: 'creator',
-                        creatorApplicationId: data.id // Store the creator application doc ID
+                        creatorApplicationId: data.id
                     });
                 } catch (error) {
                     console.error("Error updating user account type to creator:", error);
                 }
 
-                // Activity feed logic
                 const activities: Activity[] = [];
                 if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
-                if (data.updatedAt && data.updatedAt.toMillis() !== data.timestamp?.toMillis()) activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
+                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                } else if (data.updatedAt && !data.timestamp) {
+                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                }
+
                 if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
                 setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
 
             } else {
-                // --- Normal User Logic ---
                 setCreatorData(null);
 
-                // **NEW: Ensure the 'users' collection reflects 'normal' account type**
                 try {
-                    // Use setDoc with merge to avoid overwriting existing user data
                     await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
                 } catch (error) {
                     console.error("Error updating user account type to normal:", error);
@@ -353,7 +372,6 @@ export default function OverviewPage() {
             setLoading(false);
         });
 
-        // Fetch Service Bookings
         setBookingsLoading(true);
         const qBookings = query(collection(db, "bookings"), where("userId", "==", user.uid), orderBy("createdAt", "desc"));
         const unsubscribeBookings = onSnapshot(qBookings, (snapshot) => {
@@ -372,10 +390,13 @@ export default function OverviewPage() {
     }, [user]);
 
     if (loading) {
-        return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div></div>;
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
+            </div>
+        );
     }
 
-    // Render for Creator Users
     if (creatorData) {
         const isSubscribed = creatorData.subscriptionStatus === 'active' && creatorData.subscriptionExpiresAt?.toDate() > new Date();
         const getStatusInfo = (status: string) => {
@@ -388,62 +409,129 @@ export default function OverviewPage() {
         const applicationStatus = getStatusInfo(creatorData.status);
 
         return (
-            // Added mb-24 here
-            <div className="space-y-8 mb-24">
-                <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+            <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
+                <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-6 sm:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
                     <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/5 rounded-full filter blur-2xl"></div>
                     <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-white/5 rounded-full filter blur-2xl"></div>
                     <div className="relative z-10">
-                        <div className="flex justify-between items-start">
+                        <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
                             <div className="flex items-center gap-4">
-                                <div className="bg-white/20 p-2 rounded-lg"><svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-12v4m-2-2h4m5 4v4m-2-2h4M5 3a2 2 0 00-2 2v1m16 0V5a2 2 0 00-2-2h-1m-4 16l2 2l2-2m-2 2v-4m-4-4l2 2l2-2m-2 2V3" /></svg></div>
-                                <h2 className="text-2xl font-bold tracking-wider uppercase">Creator Pro</h2>
+                                <div className="bg-green-400 p-2 rounded-xl"></div>
+                                <h2 className="text-xl sm:text-2xl font-bold tracking-wider uppercase">Creator Pro</h2>
                             </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isSubscribed ? 'bg-white text-purple-700' : 'bg-yellow-400 text-yellow-900'}`}>{isSubscribed ? 'Active' : 'Inactive'}</span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isSubscribed ? 'bg-green-600 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+                                {isSubscribed ? 'Active' : 'Inactive'}
+                            </span>
                         </div>
-                        <p className="mt-8 text-sm text-purple-200">{isSubscribed ? `Your premium access is active until ${formatDate(creatorData.subscriptionExpiresAt)}.` : 'Your subscription has expired. Please renew.'}</p>
+                        <p className="mt-4 sm:mt-8 text-sm text-purple-200 text-center sm:text-left">{isSubscribed ? `Your premium subscription is active until ${formatDate(creatorData.subscriptionExpiresAt)}.` : 'Your subscription has expired. Please renew.'}</p>
                     </div>
                 </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 space-y-8">
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border">
-                            <div className="flex flex-col sm:flex-row items-center gap-6">
-                                <Image src={creatorData.profilePictureUrl || 'https://placehold.co/100x100/E9D5FF/4C1D95?text=Photo'} alt="Profile" width={112} height={112} className="w-28 h-28 rounded-full object-cover border-4 border-purple-100" />
-                                <div className="flex-1 text-center sm:text-left">
-                                    <div className="flex items-center justify-center sm:justify-start gap-3">
-                                        <h2 className="text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+                            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                                <Image
+                                    src={creatorData.profilePictureUrl || 'https://placehold.co/120x120/E9D5FF/4C1D95?text=Photo'}
+                                    alt="Profile"
+                                    width={120}
+                                    height={120}
+                                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-purple-200 shadow-sm"
+                                />
+                                <div className="flex-1 text-center sm:text-left space-y-1">
+                                    <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 sm:gap-3">
+                                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
                                         <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider">Creator</span>
                                     </div>
-                                    <a href={creatorData.instagramProfileLink} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline font-medium">@{creatorData.instagramUsername}</a>
+                                    <a
+                                        href={creatorData.instagramProfileLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-purple-600 hover:underline font-medium text-sm sm:text-base"
+                                    >
+                                        @{creatorData.instagramUsername}
+                                    </a>
                                 </div>
-                                {/* Updated link and text */}
-                                <Link href="/dashboard/profile" className="w-full sm:w-auto">
-                                    <span className="px-5 py-2.5 bg-purple-50 text-purple-700 rounded-lg font-semibold text-sm hover:bg-purple-100 transition-colors cursor-pointer">Manage Profile</span>
+                                <Link href="/dashboard/profile" className="w-full sm:w-auto mt-4 sm:mt-0">
+                                    <span className="inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer w-full">
+                                        Manage Profile
+                                    </span>
                                 </Link>
                             </div>
-                            <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <InfoCard title="Followers" value={creatorData.totalFollowers || 'N/A'} icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.975 5.975 0 0112 13a5.975 5.975 0 016-5.197M15 21a9 9 0 00-9-5.197" /></svg>} />
-                                <InfoCard title="Avg. Reel Views" value={creatorData.avgReelViews || 'N/A'} icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>} />
-                                <InfoCard title="Avg. Story Views" value={creatorData.storyAverageViews || 'N/A'} icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>} />
+                            <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 bg-purple-50 rounded-xl">
+                                <InfoCard
+                                    title="Followers"
+                                    value={creatorData.totalFollowers || 'N/A'}
+                                    icon={<UsersIcon className="w-6 h-6" />}
+                                />
+                                <InfoCard
+                                    title="Avg. Reel Views"
+                                    value={creatorData.avgReelViews || 'N/A'}
+                                    icon={<PlayIcon className="w-6 h-6" />}
+                                />
+                                <InfoCard
+                                    title="Avg. Story Views"
+                                    value={creatorData.storyAverageViews || 'N/A'}
+                                    icon={<EyeIcon className="w-6 h-6" />}
+                                />
                             </div>
                         </div>
                     </div>
-                    <div className="space-y-8">
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border">
+
+                    <div className="space-y-6">
+                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
-                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${applicationStatus.bgColor} ${applicationStatus.color}`}>{applicationStatus.text}</div>
+                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${applicationStatus.bgColor} ${applicationStatus.color}`}>
+                                {applicationStatus.text}
+                            </div>
                             <p className="text-sm text-gray-600 mt-3">{creatorData.status === 'pending' ? 'Our team is reviewing your profile.' : 'You are a verified creator!'}</p>
                         </div>
-                        <div className="bg-white p-6 rounded-2xl shadow-lg border">
+                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                             <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
-                            <ul className="space-y-4">{recentActivity.length > 0 ? recentActivity.map((activity, index) => (<li key={index} className="flex items-center gap-4"><ActivityIcon type={activity.type} /><div><p className="text-sm font-medium text-gray-800">{activity.description}</p><p className="text-xs text-gray-500">{activity.time}</p></div></li>)) : <p className="text-sm text-gray-500">No recent activity.</p>}</ul>
+                            <ul className="space-y-4">
+                                {recentActivity.length > 0 ?
+                                    recentActivity.map((activity, index) => (
+                                        <li key={index} className="flex items-center gap-4">
+                                            <ActivityIcon type={activity.type} />
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-800">{activity.description}</p>
+                                                <p className="text-xs text-gray-500">{activity.time}</p>
+                                            </div>
+                                        </li>
+                                    )) : (
+                                        <p className="text-sm text-gray-500">No recent activity.</p>
+                                    )}
+                            </ul>
                         </div>
                     </div>
                 </div>
+
                 {user && (
-                    <div className="bg-white p-6 rounded-2xl shadow-lg border mt-8">
+                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 mt-8">
                         <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Bookings</h2>
-                        {bookingsLoading ? <div className="flex justify-center items-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div></div> : bookings.length > 0 ? <div className="space-y-4">{bookings.map(booking => <div key={booking.id} className="p-4 border rounded-lg flex items-center justify-between hover:bg-gray-50 transition-colors"><div><p className="text-lg font-semibold text-gray-800">{booking.campaign?.name || 'N/A Service'}</p><p className="text-sm text-gray-600">Creator: {booking.creatorName || 'N/A Creator'}{booking.creatorUsername && ` (@${booking.creatorUsername})`}</p>{booking.totalFollowers && <p className="text-xs text-gray-500">Followers: {booking.totalFollowers}</p>}<p className="text-sm text-gray-500">Booked on: {formatDate(booking.createdAt)}</p></div><span className={`px-3 py-1 rounded-full text-xs font-semibold ${booking.status === 'completed' ? 'bg-green-100 text-green-700' : booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : booking.status === 'success' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : 'N/A'}</span></div>)}</div> : <p className="text-gray-500">No service bookings found yet.</p>}
+                        {bookingsLoading ? (
+                            <div className="flex justify-center items-center h-32">
+                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div>
+                            </div>
+                        ) : bookings.length > 0 ? (
+                            <div className="space-y-4">
+                                {bookings.map(booking => (
+                                    <div key={booking.id} className="p-4 border rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors gap-3">
+                                        <div>
+                                            <p className="text-lg font-semibold text-gray-800">{booking.campaign?.name || 'N/A Service'}</p>
+                                            <p className="text-sm text-gray-600">Creator: {booking.creatorName || 'N/A Creator'}{booking.creatorUsername && ` (@${booking.creatorUsername})`}</p>
+                                            {booking.totalFollowers && <p className="text-xs text-gray-500">Followers: {booking.totalFollowers}</p>}
+                                            <p className="text-sm text-gray-500">Booked on: {formatDate(booking.createdAt)}</p>
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${booking.status === 'completed' ? 'bg-green-100 text-green-700' : booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : booking.status === 'success' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'} flex-shrink-0`}>
+                                            {booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : 'N/A'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">No service bookings found yet.</p>
+                        )}
                     </div>
                 )}
             </div>
@@ -452,13 +540,34 @@ export default function OverviewPage() {
 
     // Default view for new/normal users
     return (
-        // Added mb-24 here
-        <div className="space-y-8 mb-24">
+        <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
             <NormalUserProfile user={user!} />
             {user && (
-                <div className="bg-white p-6 rounded-2xl shadow-lg border mt-8">
+                <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 mt-8">
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Bookings</h2>
-                    {bookingsLoading ? <div className="flex justify-center items-center h-32"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div></div> : bookings.length > 0 ? <div className="space-y-4">{bookings.map(booking => <div key={booking.id} className="p-4 border rounded-lg flex items-center justify-between hover:bg-gray-50 transition-colors"><div><p className="text-lg font-semibold text-gray-800">{booking.campaign?.name || 'N/A Service'}</p><p className="text-sm text-gray-600">Creator: {booking.creatorName || 'N/A Creator'}{booking.creatorUsername && ` (@${booking.creatorUsername})`}</p>{booking.totalFollowers && <p className="text-xs text-gray-500">Followers: {booking.totalFollowers}</p>}<p className="text-sm text-gray-500">Booked on: {formatDate(booking.createdAt)}</p></div><span className={`px-3 py-1 rounded-full text-xs font-semibold ${booking.status === 'completed' ? 'bg-green-100 text-green-700' : booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : booking.status === 'success' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : 'N/A'}</span></div>)}</div> : <p className="text-gray-500">No service bookings found yet.</p>}
+                    {bookingsLoading ? (
+                        <div className="flex justify-center items-center h-32">
+                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div>
+                        </div>
+                    ) : bookings.length > 0 ? (
+                        <div className="space-y-4">
+                            {bookings.map(booking => (
+                                <div key={booking.id} className="p-4 border rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors gap-3">
+                                    <div>
+                                        <p className="text-lg font-semibold text-gray-800">{booking.campaign?.name || 'N/A Service'}</p>
+                                        <p className="text-sm text-gray-600">Creator: {booking.creatorName || 'N/A Creator'}{booking.creatorUsername && ` (@${booking.creatorUsername})`}</p>
+                                        {booking.totalFollowers && <p className="text-xs text-gray-500">Followers: {booking.totalFollowers}</p>}
+                                        <p className="text-sm text-gray-500">Booked on: {formatDate(booking.createdAt)}</p>
+                                    </div>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${booking.status === 'completed' ? 'bg-green-100 text-green-700' : booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : booking.status === 'success' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'} flex-shrink-0`}>
+                                        {booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : 'N/A'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-gray-500">No service bookings found yet.</p>
+                    )}
                 </div>
             )}
         </div>
