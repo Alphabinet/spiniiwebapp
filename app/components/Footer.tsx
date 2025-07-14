@@ -2,20 +2,16 @@ import {
   Mail,
   Phone,
   MapPin,
-  Facebook,
-  Twitter,
   Instagram,
   Linkedin,
-  Sparkles, // Icon for Lifestyle
-  Film,     // Icon for Entertainment
-  Laptop,   // Icon for Tech
-  Banknote  // Icon for Finance
 } from "lucide-react";
 import Link from 'next/link'; // Import the Link component
+import Image from 'next/image'; // Import the Image component for optimized images
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-900 text-white">
+    // Changed background color to black
+    <footer className="bg-black text-white">
       {/* Container for overall padding and max-width */}
       {/* Added pb-24 for extra bottom padding on all screen sizes to accommodate a potential fixed bottom nav */}
       <div className="container mx-auto px-4 py-8 sm:py-10 md:py-12 pb-24 sm:pb-24 md:pb-24">
@@ -25,9 +21,15 @@ export default function Footer() {
           {/* Company Info Section */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                SNAAPII
-              </span>
+              {/* Replaced SNAAPII text with an Image component */}
+              {/* Assuming the image is in the public directory, its path will be /snaapii.png */}
+              <Image
+                src="/snaapii.png"
+                alt="SNAAPII Logo"
+                width={100} // Adjust width as needed
+                height={40} // Adjust height as needed, maintaining aspect ratio
+                className="h-auto" // Ensures image scales responsively
+              />
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
               The ultimate platform connecting brands with verified digital creators for impactful collaborations and
@@ -68,10 +70,16 @@ export default function Footer() {
                   Terms & Conditions
                 </Link>
               </li>
+              {/* Added Return & Refund Policy link */}
+              <li>
+                <Link href="/return-refund" className="text-gray-400 hover:text-white transition-colors duration-300">
+                  Return & Refund Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
-         
+
           {/* Contact Info Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">Contact Us</h3>
@@ -115,6 +123,10 @@ export default function Footer() {
             </Link>
             <Link href="/cookiepolicy" className="text-gray-400 hover:text-white transition-colors duration-300">
               Cookie Policy
+            </Link>
+            {/* Added Return & Refund Policy link to the bottom bar */}
+            <Link href="/return-refund" className="text-gray-400 hover:text-white transition-colors duration-300">
+              Return & Refund Policy
             </Link>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Menu,
+  Menu, // This is the icon we'll make bigger
   Home,
   Search,
   Megaphone,
@@ -448,25 +448,31 @@ export default function Navigation() {
         </div>
       </nav>
 
-      {/* Mobile Top Bar with Side Sheet Trigger */}
-      <nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="flex items-center justify-between h-16 px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <Image
-              src="/snaapii.png"
-              alt="Snaapii Logo"
-              width={100}
-              height={100}
-            />
-            <span className="sr-only">Snaapii</span>
-          </Link>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-gray-700 hover:bg-gray-100">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </SheetTrigger>
-        </div>
-      </nav>
+     {/* Mobile Top Bar with Side Sheet Trigger */}
+<nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50">
+  <div className="flex items-center justify-between h-16 px-4">
+    <Link href="/" className="flex items-center gap-2">
+      <Image
+        src="/snaapii.png"
+        alt="Snaapii Logo"
+        width={100}
+        height={100}
+      />
+      <span className="sr-only">Snaapii</span>
+    </Link>
+
+    <SheetTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="text-gray-700 hover:bg-gray-100 p-1"
+      >
+        <Menu className="h-10 w-10" /> {/* Explicitly set the size here */}
+      </Button>
+    </SheetTrigger>
+  </div>
+</nav>
+
 
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t shadow-xl z-50 backdrop-blur-md bg-opacity-80">

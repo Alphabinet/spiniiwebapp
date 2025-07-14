@@ -6,7 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ShoppingCart, AlertCircle, Instagram, DollarSign, Briefcase, Globe } from "lucide-react";
+import { ArrowLeft, ShoppingCart, AlertCircle, Instagram, IndianRupee, Briefcase, Globe } from "lucide-react";
 import Image from "next/image"; // Import the Next.js Image component
 
 // Type definition for Creator data
@@ -300,7 +300,7 @@ export default function CreatorDetailPage() {
 
             <section>
               <h2 className="text-md font-bold text-gray-900 mb-4 flex items-center">
-                <DollarSign className="h-6 w-6 text-gray-600 mr-2" /> Pricing
+                <IndianRupee className="h-6 w-6 text-gray-600 mr-2" /> Pricing
               </h2>
               <div className={
                 parseInt(creator.reelsStoryPrice) > 0 && parseInt(creator.reelsStoryPrice) !== 0
