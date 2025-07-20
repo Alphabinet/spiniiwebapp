@@ -1,6 +1,3 @@
-// This file should be placed at `app/creator/page.tsx`
-// This version includes search, URL-synced filters, and the full original card design.
-
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
@@ -10,19 +7,19 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 
 // UI and Icon Imports
 import {
-  Users,
-  Eye,
-  Languages,
-  Gauge,
-  ArrowRight,
-  ChevronDown,
-  ArrowUpWideNarrow,
-  ArrowDownWideNarrow,
-  MapPin,
-  Tag,
-  SlidersHorizontal,
-  XCircle,
-  Search,
+  Users,
+  Eye,
+  Languages,
+  Gauge,
+  ArrowRight,
+  ChevronDown,
+  ArrowUpWideNarrow,
+  ArrowDownWideNarrow,
+  MapPin,
+  Tag,
+  SlidersHorizontal,
+  XCircle,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,22 +27,22 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 
 // --- TYPE DEFINITIONS ---
@@ -99,13 +96,13 @@ function CreatorListPage() {
   const [appliedCategory, setAppliedCategory] = useState(searchParams.get("category") || "All");
   const [appliedLanguage, setAppliedLanguage] = useState(searchParams.get("language") || "All");
   const [appliedCityState, setAppliedCityState] = useState(searchParams.get("location") || "All");
-  
+
   const [tempSelectedCategory, setTempSelectedCategory] = useState(appliedCategory);
   const [tempSelectedLanguage, setTempSelectedLanguage] = useState(appliedLanguage);
   const [tempSelectedCityState, setTempSelectedCityState] = useState(appliedCityState);
 
   const [sortBy, setSortBy] = useState<string>("followers_desc");
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false); // Default to collapsed
 
   const [categories, setCategories] = useState<string[]>(["All"]);
   const [languages, setLanguages] = useState<string[]>(["All"]);
@@ -204,13 +201,13 @@ function CreatorListPage() {
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
     if (lowerCaseSearchTerm) {
-        currentCreators = currentCreators.filter(
-            (creator) =>
-                creator.fullName.toLowerCase().includes(lowerCaseSearchTerm) ||
-                creator.instagramUsername.toLowerCase().includes(lowerCaseSearchTerm)
-        );
+      currentCreators = currentCreators.filter(
+        (creator) =>
+          creator.fullName.toLowerCase().includes(lowerCaseSearchTerm) ||
+          creator.instagramUsername.toLowerCase().includes(lowerCaseSearchTerm)
+      );
     }
-    
+
     if (appliedCategory !== "All") {
       currentCreators = currentCreators.filter(
         (creator) => creator.contentCategory === appliedCategory
@@ -238,9 +235,9 @@ function CreatorListPage() {
         case "story_views_desc":
           return parseNumber(b.storyAverageViews) - parseNumber(a.storyAverageViews);
         case "price_desc":
-           return (parseNumber(b.reelPrice) + parseNumber(b.storyPrice) + parseNumber(b.reelsStoryPrice)) - (parseNumber(a.reelPrice) + parseNumber(a.storyPrice) + parseNumber(a.reelsStoryPrice));
+          return (parseNumber(b.reelPrice) + parseNumber(b.storyPrice) + parseNumber(b.reelsStoryPrice)) - (parseNumber(a.reelPrice) + parseNumber(a.storyPrice) + parseNumber(a.reelsStoryPrice));
         case "price_asc":
-           return (parseNumber(a.reelPrice) + parseNumber(a.storyPrice) + parseNumber(a.reelsStoryPrice)) - (parseNumber(b.reelPrice) + parseNumber(b.storyPrice) + parseNumber(b.reelsStoryPrice));
+          return (parseNumber(a.reelPrice) + parseNumber(a.storyPrice) + parseNumber(a.reelsStoryPrice)) - (parseNumber(b.reelPrice) + parseNumber(b.storyPrice) + parseNumber(b.reelsStoryPrice));
         default:
           return 0;
       }
@@ -259,87 +256,155 @@ function CreatorListPage() {
   }, [sortBy]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-purple-50 py-12 md:py-16">
+    <div className="min-h-screen bg-purple-50 py-8 md:py-16">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">
-            Explore Top Instagram Creators
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-purple-900 mb-4 tracking-tight">
+            Explore Creators
           </h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Discover and connect with verified digital creators across various niches.
-          </p>
-        </div>
-        
-        <div className="relative max-w-2xl mx-auto mb-12">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-            <Input
-                placeholder="Search by name or username..."
-                className="w-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 text-lg py-6 pl-12 pr-6 rounded-full shadow-sm"
-                aria-label="Search creators"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-            />
         </div>
 
-        <div className="mb-8">
+        {/* Search Bar */}
+        <div className="relative max-w-2xl mx-auto mb-2">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400 z-10" />
+          <Input
+            placeholder="Search by name/ username..."
+            // *** FIX APPLIED HERE for search input:
+            // - Added focus:outline-none to remove the default browser outline.
+            // - Ensure focus:ring-2 provides your custom indicator.
+            className="w-full border border-purple-300 text-lg py-4 pl-10 pr-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+            aria-label="Search creators"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        {/* Show/Hide Filters Button - Small and right-aligned on mobile */}
+        <div className="flex justify-end max-w-2xl mx-auto mb-8">
           <Button
             onClick={() => setShowFilters(!showFilters)}
             variant="outline"
-            className="w-full md:w-auto rounded-full px-6 py-3 font-semibold text-lg border-2 border-purple-200 hover:border-purple-500 transition-all duration-300 shadow-md mb-6 md:mb-0"
+            size="sm"
+            // *** FIX APPLIED HERE for button:
+            // - Added focus:outline-none to remove the default browser outline.
+            // - Keep your hover/border styles.
+            className="rounded-full px-4 py-2 font-semibold text-sm border-2 border-purple-200 hover:border-purple-500 transition-all duration-300 shadow-md focus:outline-none"
           >
             {showFilters ? (
-              <><XCircle className="h-5 w-5 mr-2" /> Hide Filters</>
+              <><XCircle className="h-4 w-4 mr-2" /> Hide Filters</>
             ) : (
-              <><SlidersHorizontal className="h-5 w-5 mr-2" /> Show Filters & Sorting</>
+              <><SlidersHorizontal className="h-4 w-4 mr-2" /> Show Filters & Sorting</>
             )}
           </Button>
         </div>
 
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 bg-white p-6 rounded-2xl shadow-lg border border-purple-200"
-          >
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-              {/* Filter controls */}
-               <div className="flex flex-col gap-2">
-                <label htmlFor="category-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><Tag className="w-4 h-4 text-purple-500" />Category</label>
-                <Select value={tempSelectedCategory} onValueChange={setTempSelectedCategory}><SelectTrigger id="category-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all"><SelectValue placeholder="Select Category" /></SelectTrigger><SelectContent className="rounded-xl max-h-64 overflow-y-auto">{categories.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}</SelectContent></Select>
+        {/* Collapsible Filter & Sort Panel - Aligned like search bar */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="max-w-2xl mx-auto mb-12 bg-white p-6 rounded-2xl shadow-lg border border-purple-200 overflow-hidden"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+                {/* Filter controls */}
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="category-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><Tag className="w-4 h-4 text-purple-500" />Category</label>
+                  <Select value={tempSelectedCategory} onValueChange={setTempSelectedCategory}>
+                    <SelectTrigger
+                      id="category-select"
+                      // *** FIX APPLIED HERE for SelectTrigger:
+                      // - Added focus:outline-none to remove the default browser outline.
+                      // - Your custom focus:ring is already in place.
+                      className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
+                    >
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                      {categories.map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="language-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><Languages className="w-4 h-4 text-purple-500" />Language</label>
+                  <Select value={tempSelectedLanguage} onValueChange={setTempSelectedLanguage}>
+                    <SelectTrigger
+                      id="language-select"
+                      // *** FIX APPLIED HERE for SelectTrigger:
+                      // - Added focus:outline-none to remove the default browser outline.
+                      className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
+                    >
+                      <SelectValue placeholder="Select Language" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                      {languages.map((language) => (<SelectItem key={language} value={language}>{language}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="city-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><MapPin className="w-4 h-4 text-purple-500" />Location</label>
+                  <Select value={tempSelectedCityState} onValueChange={setTempSelectedCityState}>
+                    <SelectTrigger
+                      id="city-select"
+                      // *** FIX APPLIED HERE for SelectTrigger:
+                      // - Added focus:outline-none to remove the default browser outline.
+                      className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
+                    >
+                      <SelectValue placeholder="Select City/State" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl max-h-64 overflow-y-auto">
+                      {citiesStates.map((city) => (<SelectItem key={city} value={city}>{city}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label htmlFor="language-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><Languages className="w-4 h-4 text-purple-500" />Language</label>
-                <Select value={tempSelectedLanguage} onValueChange={setTempSelectedLanguage}><SelectTrigger id="language-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all"><SelectValue placeholder="Select Language" /></SelectTrigger><SelectContent className="rounded-xl max-h-64 overflow-y-auto">{languages.map((language) => (<SelectItem key={language} value={language}>{language}</SelectItem>))}</SelectContent></Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label htmlFor="city-select" className="text-sm font-medium text-gray-700 flex items-center gap-1"><MapPin className="w-4 h-4 text-purple-500" />Location</label>
-                <Select value={tempSelectedCityState} onValueChange={setTempSelectedCityState}><SelectTrigger id="city-select" className="w-full rounded-xl border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all"><SelectValue placeholder="Select City/State" /></SelectTrigger><SelectContent className="rounded-xl max-h-64 overflow-y-auto">{citiesStates.map((city) => (<SelectItem key={city} value={city}>{city}</SelectItem>))}</SelectContent></Select>
-              </div>
-            </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto mt-6 md:mt-0 items-end">
-                <Button onClick={handleApplyFilters} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-3 transition-all duration-200 shadow-md">Apply Filters</Button>
-                <Button onClick={handleResetFilters} variant="outline" className="w-full rounded-full px-6 py-3 font-semibold border-2 border-gray-300 hover:border-red-400 hover:text-red-600 transition-all duration-200"><XCircle className="h-4 w-4 mr-2" /> Reset</Button>
-            </div>
-          </motion.div>
-        )}
-        
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
-            <p className="text-md font-medium text-gray-600">Showing <span className="font-bold text-purple-600">{sortedAndFilteredCreators.length}</span> of <span className="font-bold text-gray-800">{creators.length}</span> creators</p>
-            <div className="relative z-10 w-full sm:w-auto">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild><Button variant="outline" className="w-full sm:w-auto rounded-full px-5 py-2 flex items-center justify-center gap-2 transition-all duration-200 border-2 border-gray-200 hover:border-purple-400">{sortBy.includes('desc') ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}{getSortByLabel()}<ChevronDown className="h-4 w-4 ml-1 opacity-70" /></Button></DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64"><DropdownMenuLabel>Sort by</DropdownMenuLabel><DropdownMenuSeparator /><DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
-                    <DropdownMenuRadioItem value="followers_desc"><Users className="mr-2 h-4 w-4" /> Followers (Highest)</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="reel_views_desc"><Eye className="mr-2 h-4 w-4" /> Avg. Reel Views (Highest)</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="story_views_desc"><Eye className="mr-2 h-4 w-4" /> Avg. Story Views (Highest)</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="price_desc"><ArrowDownWideNarrow className="mr-2 h-4 w-4" /> Price (High to Low)</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="price_asc"><ArrowUpWideNarrow className="mr-2 h-4 w-4" /> Price (Low to High)</DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup></DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+              {/* Sort By Dropdown and Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 w-full mt-6 items-end justify-between">
+                <div className="relative z-10 w-full sm:w-auto">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        // *** FIX APPLIED HERE for DropdownMenuTrigger Button:
+                        // - Added focus:outline-none to remove the default browser outline.
+                        className="w-full rounded-full px-5 py-2 flex items-center justify-center gap-2 transition-all duration-200 border-2 border-gray-200 hover:border-purple-400 focus:outline-none"
+                      >
+                        {sortBy.includes('desc') ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
+                        {getSortByLabel()}
+                        <ChevronDown className="h-4 w-4 ml-1 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-64">
+                      <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuRadioGroup value={sortBy} onValueChange={setSortBy}>
+                        <DropdownMenuRadioItem value="followers_desc"><Users className="mr-2 h-4 w-4" /> Followers (Highest)</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="reel_views_desc"><Eye className="mr-2 h-4 w-4" /> Avg. Reel Views (Highest)</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="story_views_desc"><Eye className="mr-2 h-4 w-4" /> Avg. Story Views (Highest)</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="price_desc"><ArrowDownWideNarrow className="mr-2 h-4 w-4" /> Price (High to Low)</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="price_asc"><ArrowUpWideNarrow className="mr-2 h-4 w-4" /> Price (Low to High)</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                  <Button onClick={handleApplyFilters} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-6 py-3 transition-all duration-200 shadow-md">Apply Filters</Button>
+                  <Button onClick={handleResetFilters} variant="outline" className="w-full rounded-full px-6 py-3 font-semibold border-2 border-gray-300 hover:border-red-400 hover:text-red-600 transition-all duration-200"><XCircle className="h-4 w-4 mr-2" /> Reset</Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Creator count moved below the filter panel when it's open, or below the show/hide button when collapsed */}
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+          <p className="text-md font-medium text-gray-600">Showing <span className="font-bold text-purple-600">{sortedAndFilteredCreators.length}</span> of <span className="font-bold text-gray-800">{creators.length}</span> creators</p>
         </div>
+        {/* Added a horizontal line for separation */}
+        <div className="border-b border-gray-200 mb-8"></div>
 
         {loadingCreators ? (
           <div className="text-center text-gray-600 py-20"><svg className="animate-spin inline-block h-8 w-8 text-purple-500 mr-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Loading creators...</div>
@@ -412,9 +477,9 @@ function CreatorListPage() {
 export default function CreatorListPageWrapper() {
   return (
     <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center text-lg font-semibold text-gray-600">
-            Loading Page...
-        </div>
+      <div className="min-h-screen flex items-center justify-center text-lg font-semibold text-gray-600">
+        Loading Page...
+      </div>
     }>
       <CreatorListPage />
     </Suspense>

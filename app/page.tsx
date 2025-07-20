@@ -275,8 +275,8 @@ export default function HomePage() {
                 firstValidService === "Reel"
                   ? data.reelPrice
                   : firstValidService === "Story"
-                  ? data.storyPrice
-                  : data.reelsStoryPrice,
+                    ? data.storyPrice
+                    : data.reelsStoryPrice,
             };
           }
 
@@ -480,14 +480,14 @@ export default function HomePage() {
 
   const createTouchEndHandler =
     (slideHandlers: { nextSlide: () => void; prevSlide: () => void }) =>
-    (e: React.TouchEvent<HTMLDivElement>) => {
-      const touchEndX = e.changedTouches[0].clientX;
-      const swipeDistance = touchStartX.current - touchEndX;
-      if (Math.abs(swipeDistance) > 50) {
-        if (swipeDistance > 0) slideHandlers.nextSlide();
-        else slideHandlers.prevSlide();
-      }
-    };
+      (e: React.TouchEvent<HTMLDivElement>) => {
+        const touchEndX = e.changedTouches[0].clientX;
+        const swipeDistance = touchStartX.current - touchEndX;
+        if (Math.abs(swipeDistance) > 50) {
+          if (swipeDistance > 0) slideHandlers.nextSlide();
+          else slideHandlers.prevSlide();
+        }
+      };
 
   // --- EVENT HANDLERS ---
   const handleGetStarted = () => router.push(user ? "/dashboard" : "/signin");
@@ -691,9 +691,8 @@ export default function HomePage() {
               <button
                 key={index}
                 onClick={() => slideHandlers.goToSlide(index)}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  currentSlide === index ? "bg-purple-600 scale-125" : "bg-gray-300"
-                }`}
+                className={`w-2 h-2 rounded-full transition-all ${currentSlide === index ? "bg-purple-600 scale-125" : "bg-gray-300"
+                  }`}
                 aria-label={`Go to slide ${index + 1}`}
               />
             ))}
@@ -772,48 +771,40 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-purple-50">
       {/* Hero Section */}
-      <section
-        id="homepage-search-section"
-        className="bg-purple-500 py-8 md:py-12 relative overflow-hidden"
-      >
-        <div className="absolute inset-0 z-0 opacity-30">
-          <div className="w-80 h-80 bg-gradient-to-tr from-blue-100 to-purple-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70 absolute top-1/4 left-1/4 transform -translate-x-1/2 -translate-y-1/2 animate-blob"></div>
-          <div className="w-80 h-80 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full mix-blend-multiply filter blur-3xl opacity-70 absolute bottom-1/4 right-1/4 transform translate-x-1/2 -translate-y-1/2 animate-blob animation-delay-2000"></div>
-        </div>
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="text-center mb-8 md:mb-10">
-            <div className="max-w-2xl mx-auto relative">
-              <div className="relative flex items-center w-full bg-white rounded-xl shadow-lg border border-gray-100 focus-within:ring-4 focus-within:ring-purple-200 transition-all duration-300">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
-                <Input
-                  ref={homepageSearchInputRef}
-                  id="homepage-search-input"
-                  placeholder={`Search for Creator`}
-                  className="w-full border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none text-sm sm:text-base py-3 pl-12 pr-28 sm:pr-32 rounded-xl placeholder:text-gray-400 bg-transparent"
-                  aria-label="Search creators, services, and campaigns"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={handleSearchFocus}
-                  onBlur={handleSearchBlur}
-                  onKeyPress={(e) => e.key === "Enter" && handleSearchSubmit()}
-                />
-                <Button
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-4 sm:px-6 py-2 bg-purple-100 text-purple-600 font-semibold shadow-md hover:shadow-lg transition-all duration-300 text-sm border border-purple-300"
-                  onClick={handleSearchSubmit}
-                >
-                  Search
-                </Button>
-              </div>
+      <section id="homepage-search-section">
+        <div className="container mx-auto px-4 py-2">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative flex items-center w-full bg-white rounded-2xl shadow-lg border border-gray-400 focus-within:ring-4 focus-within:ring-purple-200 transition-all duration-300">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-8 text-gray-500 z-10" />
+              <Input
+                ref={homepageSearchInputRef}
+                id="homepage-search-input"
+                placeholder={`Search for Creator`}
+                // Changed to rounded-l-2xl for the left side, and removed right-side rounding
+                className="w-full border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none text-sm sm:text-base py-3 pl-12 pr-28 sm:pr-32 rounded-l-2xl placeholder:text-gray-400 bg-transparent"
+                aria-label="Search creators, services, and campaigns"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
+                onKeyPress={(e) => e.key === "Enter" && handleSearchSubmit()}
+              />
+              <Button
+                // Button already has rounded-r-2xl, which is correct for alignment
+                className="absolute right-0 top-0 bottom-0 rounded-r-2xl px-4 sm:px-6 bg-purple-700 text-white font-semibold hover:bg-purple-700 transition-colors duration-300 text-sm"
+                onClick={handleSearchSubmit}
+              >
+                Search
+              </Button>
             </div>
           </div>
-          {/* Removed the category buttons and icons section */}
         </div>
       </section>
 
       {/* Banner Slider */}
-      <section className="py-6">
+      <section className="">
         <div className="container mx-auto px-4">
           {loadingBanners ? (
             <div className="relative pt-[38%] flex items-center justify-center bg-gray-100 rounded-xl">
@@ -827,9 +818,8 @@ export default function HomePage() {
                 {banners.map((banner, index) => (
                   <div
                     key={banner.id}
-                    className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-                      index === currentBanner ? "opacity-100" : "opacity-0"
-                    }`}
+                    className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${index === currentBanner ? "opacity-100" : "opacity-0"
+                      }`}
                   >
                     <Image
                       src={banner.image}
@@ -865,11 +855,10 @@ export default function HomePage() {
                           setCurrentBanner(index);
                           resetBannerInterval();
                         }}
-                        className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all ${
-                          index === currentBanner
-                            ? "bg-white scale-125"
-                            : "bg-white/50"
-                        }`}
+                        className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all ${index === currentBanner
+                          ? "bg-white scale-125"
+                          : "bg-white/50"
+                          }`}
                       />
                     ))}
                   </div>
@@ -887,34 +876,35 @@ export default function HomePage() {
       </section>
 
       {/* Top Creators Slider */}
-      <section id="creators" className="py-10 bg-white">
+      <section id="creators" className="py-8">
         <div className="container mx-auto px-4 relative">
-          <div className="flex flex-row justify-between items-center mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+          <div className="flex flex-row justify-between items-center mb-2">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
               Top Creators
             </h2>
             <Link href="/creator" passHref>
               <Button
-                variant="outline"
+                variant="nooutline"
                 className="border-purple-600 text-purple-600 hover:bg-purple-50 whitespace-nowrap"
               >
                 View All
               </Button>
             </Link>
           </div>
-          <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="mb-2 overflow-x-auto pb-0 scrollbar-hide">
             <div className="flex space-x-2 min-w-max">
               {availableCategories.map((category) => (
                 <Button
                   key={category}
+                  // Ensure the variant and className handle all states for consistent color
                   variant={selectedCategory === category ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedCategory(category)}
-                  className={`rounded-full px-4 py-1 transition-all duration-200 whitespace-nowrap ${
-                    selectedCategory === category
-                      ? "bg-purple-600 text-white"
-                      : "hover:bg-gray-100"
-                  }`}
+                  className={`rounded-full px-4 py-1 transition-all duration-200 whitespace-nowrap
+              ${selectedCategory === category
+                      ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600" // Keep consistent purple for active/focus
+                      : "border border-gray-300 text-gray-700 hover:bg-gray-100" // Default outline style
+                    }`}
                 >
                   {category}
                 </Button>
@@ -933,15 +923,15 @@ export default function HomePage() {
       </section>
 
       {/* Category Specific Sliders */}
-      <section id="comedy-creators" className="py-10 bg-gray-50">
+      <section id="comedy-creators" className="py-2">
         <div className="container mx-auto px-4 relative">
-          <div className="flex flex-row justify-between items-center mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+          <div className="flex flex-row justify-between items-center mb-2">
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
               Top Comedy
             </h2>
             <Link href="/creator?category=Comedy" passHref>
               <Button
-                variant="outline"
+                variant="nooutline"
                 className="border-purple-600 text-purple-600 hover:bg-purple-50"
               >
                 View All
@@ -959,15 +949,15 @@ export default function HomePage() {
         </div>
       </section>
       {entertainmentCreators.length > 0 && (
-        <section id="entertainment-creators" className="py-10 bg-white">
+        <section id="entertainment-creators" className="py-2">
           <div className="container mx-auto px-4 relative">
-            <div className="flex flex-row justify-between items-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+            <div className="flex flex-row justify-between items-center mb-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
                 Top Entertainment
               </h2>
               <Link href="/creator?category=Entertainment" passHref>
                 <Button
-                  variant="outline"
+                  variant="nooutline"
                   className="border-purple-600 text-purple-600 hover:bg-purple-50"
                 >
                   View All
@@ -986,15 +976,15 @@ export default function HomePage() {
         </section>
       )}
       {lifestyleCreators.length > 0 && (
-        <section id="lifestyle-creators" className="py-10 bg-gray-50">
+        <section id="lifestyle-creators" className="py-2">
           <div className="container mx-auto px-4 relative">
-            <div className="flex flex-row justify-between items-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+            <div className="flex flex-row justify-between items-center mb-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
                 Top Lifestyle
               </h2>
               <Link href="/creator?category=Lifestyle" passHref>
                 <Button
-                  variant="outline"
+                  variant="nooutline"
                   className="border-purple-600 text-purple-600 hover:bg-purple-50"
                 >
                   View All
@@ -1013,15 +1003,15 @@ export default function HomePage() {
         </section>
       )}
       {beautyCreators.length > 0 && (
-        <section id="beauty-creators" className="py-10 bg-white">
+        <section id="beauty-creators" className="py-2">
           <div className="container mx-auto px-4 relative">
-            <div className="flex flex-row justify-between items-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+            <div className="flex flex-row justify-between items-center mb-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
                 Top Beauty
               </h2>
               <Link href="/creator?category=Beauty" passHref>
                 <Button
-                  variant="outline"
+                  variant="nooutline"
                   className="border-purple-600 text-purple-600 hover:bg-purple-50"
                 >
                   View All
@@ -1040,15 +1030,15 @@ export default function HomePage() {
         </section>
       )}
       {techCreators.length > 0 && ( // New Tech Category Slider
-        <section id="tech-creators" className="py-10 bg-gray-50">
+        <section id="tech-creators" className="py-2">
           <div className="container mx-auto px-4 relative">
-            <div className="flex flex-row justify-between items-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900">
+            <div className="flex flex-row justify-between items-center mb-2">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-purple-900">
                 Top Tech
               </h2>
               <Link href="/creator?category=Tech" passHref>
                 <Button
-                  variant="outline"
+                  variant="nooutline"
                   className="border-purple-600 text-purple-600 hover:bg-purple-50"
                 >
                   View All
@@ -1068,21 +1058,18 @@ export default function HomePage() {
       )}
 
       {/* Why Choose Us, How It Works, Trusted Clients */}
-      <section className="py-16 bg-white relative overflow-hidden">
+      <section className="py-10 bg-white relative overflow-hidden">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+          <div className="text-center mb-2">
+            <h2 className="text-3xl sm:text-4xl font-bold text-purple-900 mb-4">
               Why Choose SNAAPII?
             </h2>
-            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
-              The most trusted platform for brand-creator collaborations
-            </p>
           </div>
 
           {/* Section: For Creators */}
-          <div className="mb-16">
-            <h3 className="text-2xl sm:text-3xl font-semibold text-center text-blue-700 mb-10">
-              🎯 What We Do Better – For Creators
+          <div className="mb-10">
+            <h3 className="text-2xl sm:text-3xl font-bold text-center bg-purple-100 inline:block rounded-3xl text-blue-800 mb-10">
+              For Creator
             </h3>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 ">
               {creatorBenefits.map((benefit, index) => (
@@ -1109,8 +1096,8 @@ export default function HomePage() {
 
           {/* Section: For Brands */}
           <div>
-            <h3 className="text-2xl sm:text-3xl font-semibold text-center text-purple-700 mb-10">
-              🏢 What We Do Better – For Brands
+            <h3 className="text-2xl sm:text-3xl font-bold text-center bg-purple-100 inline:block rounded-3xl text-blue-800 mb-10">
+              For Brands
             </h3>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {brandBenefits.map((benefit, index) => (
@@ -1131,10 +1118,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-20 bg-gray-50 relative">
+      <section className="py-10 relative">
         <div className="container mx-auto px-4">
-          <div className="text-left mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+          <div className="text-left mb-8">
+            <h2 className="text-3xl sm:text-4xl font-bold text-purple-900">
               HOW IT WORKS?
             </h2>
           </div>
@@ -1153,24 +1140,21 @@ export default function HomePage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className={`relative z-10 mb-12 flex items-start flex-col sm:flex-row ${
-                    isLeft ? "sm:justify-start sm:pr-12" : "sm:justify-end sm:pl-12"
-                  }`}
+                  className={`relative z-10 mb-12 flex items-start flex-col sm:flex-row ${isLeft ? "sm:justify-start sm:pr-12" : "sm:justify-end sm:pl-12"
+                    }`}
                 >
                   {/* Connector Line and Circle */}
                   <div
                     className={`absolute top-6 w-4 h-4 rounded-full bg-purple-600 z-10 border-4 border-white shadow-md
-                    ${
-                      isLeft
+                    ${isLeft
                         ? "left-1/2 -translate-x-1/2 sm:left-1/2 sm:-translate-x-1/2"
                         : "left-1/2 -translate-x-1/2 sm:left-1/2 sm:-translate-x-1/2"
-                    }`}
+                      }`}
                   ></div>
 
                   <div
-                    className={`w-full sm:w-1/2 ${
-                      isLeft ? "sm:text-left text-center" : "sm:text-right text-center"
-                    } mt-8 sm:mt-0`}
+                    className={`w-full sm:w-1/2 ${isLeft ? "sm:text-left text-center" : "sm:text-right text-center"
+                      } mt-8 sm:mt-0`}
                   >
                     <motion.div
                       whileHover={{ scale: 1.03 }}
@@ -1203,7 +1187,7 @@ export default function HomePage() {
             ) : (
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-6 text-lg w-full sm:w-auto"
+                className="bg-gradient-to-r from-purple-600 to-purple-800 text-white px-8 py-6 text-lg rounded-xl w-full sm:w-auto"
                 onClick={handleGetStarted}
               >
                 {user ? "Go to Dashboard" : "Get Started Today"}
@@ -1214,7 +1198,7 @@ export default function HomePage() {
       </section>
 
       {/* Trusted Clients */}
-      <section className="py-16 bg-white">
+      <section className="py-10 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">

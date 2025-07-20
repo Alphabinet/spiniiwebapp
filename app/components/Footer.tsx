@@ -79,7 +79,6 @@ export default function Footer() {
             </ul>
           </div>
 
-
           {/* Contact Info Section */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">Contact Us</h3>
@@ -102,19 +101,7 @@ export default function Footer() {
 
         {/* Bottom Bar - Copyright and Policies */}
         <div className="border-t border-gray-800 mt-8 pt-6 sm:pt-8 flex flex-col md:flex-row justify-between items-center text-center md:text-left">
-          <p className="text-gray-400 text-sm mb-4 md:mb-0">
-            © {new Date().getFullYear()} SNAAPII. All rights reserved. {" "}
-            Developed by{" "}
-            <a
-              href="https://alphabinet.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-white transition-colors duration-300"
-            >
-              Alphabinet.com
-            </a>
-          </p>
-          <div className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2 text-sm">
+          <div className="flex flex-wrap justify-center md:justify-end gap-x-6 gap-y-2 text-sm mb-4">
             <Link href="/privacy" className="text-gray-400 hover:text-white transition-colors duration-300">
               Privacy Policy
             </Link>
@@ -129,6 +116,18 @@ export default function Footer() {
               Return & Refund Policy
             </Link>
           </div>
+          <p className="text-gray-400 text-sm mb-4 md:mb-0">
+            © {new Date().getFullYear()} SNAAPII. All rights reserved. {" "}
+            Developed by{" "}
+            <a
+              href="https://alphabinet.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-white transition-colors duration-300"
+            >
+              Alphabinet.com
+            </a>
+          </p>
         </div>
       </div>
     </footer>

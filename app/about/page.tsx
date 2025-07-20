@@ -88,7 +88,7 @@ export default function AboutPage() {
           <div className="relative z-10">
             <h2 className="text-3xl sm:text-4xl font-bold text-center text-purple-200 mb-6 md:mb-8">Our Mission</h2> {/* Reduced text size for smaller screens */}
             <p className="text-base sm:text-lg md:text-xl text-purple-100 leading-relaxed max-w-4xl mx-auto text-justify sm:text-center"> {/* Adjusted text size for responsiveness */}
-              We started with a simple observation: talented creators were struggling to find the right brand opportunities, and brands were spending too much time finding trusted influencers. That’s where **Snaapii** comes in.
+              We started with a simple observation: talented creators were struggling to find the right brand opportunities, and brands were spending too much time finding trusted influencers. That’s where Snaapii comes in.
               <br /><br />
               Our platform helps verified creators showcase their work, and lets brands discover and collaborate with them through a streamlined, transparent system. From paid campaigns to content services, we make influencer marketing simple, secure, and scalable.
               <br /><br />

@@ -240,7 +240,7 @@ export default function SignInSignUpPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 max-w-sm w-full border border-gray-100 transform hover:scale-[1.005] transition-transform duration-300">
-        <h1 className="text-4xl sm:text-5xl font-extrabold text-center mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
+        <h1 className="text-4xl sm:text-5xl font-extrabold text-center mb-6 bg-clip-text text-transparent bg-purple-600">
           SNAAPII
         </h1>
         <p className="text-center text-gray-600 mb-8 text-lg">Your gateway to powerful collaborations.</p>

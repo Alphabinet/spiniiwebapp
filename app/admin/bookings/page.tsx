@@ -62,7 +62,8 @@ interface Booking {
     status: string;
     transactionId: string;
   };
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  // Updated: Added 'pending' back to the status types
+  status: 'pending' | 'accepted' | 'completed' | 'rejected';
   creatorContact?: CreatorContact;
 }
 
@@ -86,12 +87,13 @@ const formatCurrency = (amount: number): string => {
   }).format(amount || 0);
 };
 
+// Updated: Added 'pending' back to STATUS_OPTIONS
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'pending', label: 'Pending' },
-  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'accepted', label: 'Accepted' },
   { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' }
+  { value: 'rejected', label: 'Rejected' }
 ];
 
 // --- Main Component ---
@@ -146,11 +148,11 @@ const BookingsPage = () => {
               // 1. Get creator application
               const creatorAppRef = doc(db, "creatorApplications", booking.creatorId);
               const creatorAppSnap = await getDoc(creatorAppRef);
-              
+
               if (creatorAppSnap.exists()) {
                 const creatorData = creatorAppSnap.data();
                 const userId = creatorData.userId;
-                
+
                 if (!userId) {
                   return {
                     ...booking,
@@ -165,11 +167,11 @@ const BookingsPage = () => {
                 // 2. Get user document
                 const userDocRef = doc(db, "users", userId);
                 const userDocSnap = await getDoc(userDocRef);
-                
+
                 if (userDocSnap.exists()) {
                   const userData = userDocSnap.data();
                   const creatorAppId = userData.creatorApplicationId;
-                  
+
                   if (!creatorAppId) {
                     return {
                       ...booking,
@@ -184,7 +186,7 @@ const BookingsPage = () => {
                   // 3. Get creator application document for Instagram
                   const creatorAppRef2 = doc(db, "creatorApplications", creatorAppId);
                   const creatorAppSnap2 = await getDoc(creatorAppRef2);
-                  
+
                   if (creatorAppSnap2.exists()) {
                     const creatorAppData = creatorAppSnap2.data();
                     return {
@@ -202,17 +204,17 @@ const BookingsPage = () => {
               console.error(`Failed to fetch creator details for ID: ${booking.creatorId}`, e);
             }
           }
-          return { 
-            ...booking, 
-            creatorContact: { 
-              email: 'Not Found', 
+          return {
+            ...booking,
+            creatorContact: {
+              email: 'Not Found',
               phone: 'Not Found',
               instagramProfileLink: 'Not Found'
-            } 
+            }
           };
         })
       );
-      
+
       setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1] ?? null);
       setBookings(enrichedBookings);
 
@@ -262,13 +264,14 @@ const BookingsPage = () => {
     });
   }, [bookings, searchTerm, statusFilter]);
 
+  // Updated: Added color for 'pending' status
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'confirmed': return 'bg-blue-100 text-blue-800';
+      case 'accepted': return 'bg-blue-100 text-blue-800';
       case 'completed': return 'bg-green-100 text-green-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800'; // Fallback for unexpected statuses
     }
   };
 
@@ -409,7 +412,7 @@ const BookingsPage = () => {
             >
               {STATUS_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>
-                    {option.label}
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -482,13 +485,14 @@ const BookingsPage = () => {
                       <select
                         value={booking.status}
                         onChange={(e) => updateBookingStatus(booking.id, e.target.value as Booking['status'])}
-                        className={`rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 ${getStatusColor(booking.status).replace('text', 'bg')}`}
+                        className="rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 bg-white text-gray-900"
                         onClick={e => e.stopPropagation()}
                       >
+                        {/* Added 'pending' back as an option */}
                         <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
+                        <option value="accepted">Accepted</option>
                         <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
+                        <option value="rejected">Rejected</option>
                       </select>
                     )}
                   </td>
@@ -623,7 +627,7 @@ const BookingsPage = () => {
                 <FiX className="h-6 w-6" />
               </button>
             </div>
-            
+
             <div className="p-4 sm:p-6">
               <div className="mb-4">
                 <p className="text-sm text-gray-500">ID: {selectedBooking.id}</p>
@@ -673,7 +677,7 @@ const BookingsPage = () => {
                       <p className="text-gray-600">@{selectedBooking.creatorUsername}</p>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3 text-sm border-t border-gray-200 pt-3 mt-3">
                     <div>
                       <p className="text-xs text-gray-500">Email</p>
@@ -689,9 +693,9 @@ const BookingsPage = () => {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Instagram Profile</p>
-                      <a 
-                        href={selectedBooking.creatorContact?.instagramProfileLink} 
-                        target="_blank" 
+                      <a
+                        href={selectedBooking.creatorContact?.instagramProfileLink}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="font-medium text-indigo-600 hover:underline"
                       >

@@ -12,46 +12,12 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { User as FirebaseUser } from "firebase/auth";
 import Image from "next/image";
 
-// --- Razorpay Type Declarations ---
-declare global {
-    interface Window {
-        Razorpay: {
-            new(options: RazorpayOptions): RazorpayInstance;
-        };
-    }
-}
-
-interface RazorpayOptions {
-    key: string | undefined;
-    subscription_id: string;
-    name: string;
-    description: string;
-    handler: (response: RazorpayPaymentResponse) => void;
-    prefill: {
-        name: string;
-        email: string;
-        contact: string;
-    };
-    theme: {
-        color: string;
-    };
-}
-
-interface RazorpayInstance {
-    open: () => void;
-    on: (event: string, callback: (response: RazorpayErrorResponse) => void) => void;
-}
-
-interface RazorpayPaymentResponse {
-    razorpay_payment_id: string;
-}
-
-interface RazorpayErrorResponse {
-    error: {
-        description: string;
-        code: string;
-    };
-}
+// --- REMOVED Razorpay Type Declarations ---
+// declare global { ... }
+// interface RazorpayOptions { ... }
+// interface RazorpayInstance { ... }
+// interface RazorpayPaymentResponse { ... }
+// interface RazorpayErrorResponse { ... }
 
 // --- TypeScript Interfaces ---
 interface ApplicationData {
@@ -77,15 +43,15 @@ interface ApplicationData {
     status: 'pending' | 'approved' | 'rejected';
     timestamp: FirestoreTimestamp;
     updatedAt?: FirestoreTimestamp;
-    subscriptionStatus?: 'active' | 'inactive';
-    subscriptionExpiresAt?: FirestoreTimestamp;
+    subscriptionStatus?: 'active' | 'inactive'; // Keeping this for existing data structure
+    subscriptionExpiresAt?: FirestoreTimestamp; // Keeping this for existing data structure
     adminFeedback?: string;
 }
 
 interface ApplicationFormProps {
     user: FirebaseUser | null | undefined;
     existingApplication: ApplicationData | null;
-    isSubscribed: boolean;
+    isSubscribed: boolean; // Keeping this prop, but its influence on payment flow is removed
 }
 
 interface ApplicationStatusProps {
@@ -126,7 +92,7 @@ export default function CreatorDashboard() {
     const [activeTab, setActiveTab] = useState("application");
     const [existingApplication, setExistingApplication] = useState<ApplicationData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isSubscribed, setIsSubscribed] = useState(false); // Kept for now, but its relevance to this form is removed.
 
     useEffect(() => {
         if (!user) {
@@ -145,6 +111,7 @@ export default function CreatorDashboard() {
                 const applicationData = { id: applicationDoc.id, ...applicationDoc.data() } as ApplicationData;
                 setExistingApplication(applicationData);
 
+                // Subscription status check remains, but no payment required based on it in ApplicationForm.
                 const status = applicationData.subscriptionStatus;
                 const expiresAt = applicationData.subscriptionExpiresAt;
 
@@ -241,14 +208,11 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // REMOVED: useEffect to load Razorpay script
     useEffect(() => {
-        if (!isSubscribed) {
-            const script = document.createElement("script");
-            script.src = "https://checkout.razorpay.com/v1/checkout.js";
-            script.async = true;
-            document.body.appendChild(script);
-        }
-    }, [isSubscribed]);
+        // This useEffect is now empty or can be removed if no other side effects are needed.
+        // It previously loaded the Razorpay script based on `isSubscribed`.
+    }, []); // No dependencies as it's not loading external scripts anymore
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -301,97 +265,40 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
         if (!user) { alert("You must be logged in."); return; }
         setUploading(true);
 
-        if (isSubscribed) {
-            try {
-                let imageUrl = existingApplication?.profilePictureUrl || "";
-                if (image) {
-                    const imageRef = ref(storage, `creator_profiles/${uuidv4()}`);
-                    await uploadBytes(imageRef, image);
-                    imageUrl = await getDownloadURL(imageRef);
-                }
-                const dataToSend = { ...formData, profilePictureUrl: imageUrl, userId: user?.uid, status: "pending", updatedAt: serverTimestamp() };
-                if (existingApplication) {
-                    await updateDoc(doc(db, "creatorApplications", existingApplication.id), dataToSend);
-                }
-                setShowSuccessModal(true);
-            } catch (err) {
-                console.error("Error updating creator application:", err);
-                alert("Error updating application. Please try again.");
-            } finally {
-                setUploading(false);
+        try {
+            let imageUrl = existingApplication?.profilePictureUrl || "";
+            if (image) {
+                const imageRef = ref(storage, `creator_profiles/${uuidv4()}`);
+                await uploadBytes(imageRef, image);
+                imageUrl = await getDownloadURL(imageRef);
             }
-        } else {
-            try {
-                // This is where you would get the plan ID the user selected.
-                const selectedPlanId = "plan_Qo6eS0ArfWDhNg"; 
+            // All applications now bypass subscription logic and directly submit/update
+            const dataToSend = {
+                ...formData,
+                profilePictureUrl: imageUrl,
+                userId: user.uid, // Ensure userId is set
+                status: "pending", // Application status is always pending upon submission
+                timestamp: existingApplication?.timestamp || serverTimestamp(), // Keep original timestamp if updating
+                updatedAt: serverTimestamp(), // Update timestamp on every submission
+                // Removed subscription-related fields from dataToSend as they are no longer handled here:
+                // subscriptionId, paymentId, subscriptionStatus, subscriptionExpiresAt
+            };
 
-                const subResponse = await fetch('/api/razorpay/create-subscription', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: user.uid,
-                        planId: selectedPlanId // Send the dynamic plan ID
-                    }),
-                });
-                const subscriptionData = await subResponse.json();
-                if (!subResponse.ok) { throw new Error(subscriptionData.error || 'Failed to create subscription.'); }
-
-                const options: RazorpayOptions = {
-                    key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                    subscription_id: subscriptionData.id,
-                    name: "Creator Monthly Subscription",
-                    description: "₹249 per month for creator features.",
-                    handler: async (response: RazorpayPaymentResponse) => {
-                        let imageUrl = existingApplication?.profilePictureUrl || "";
-                        if (image) {
-                            const imageRef = ref(storage, `creator_profiles/${uuidv4()}`);
-                            await uploadBytes(imageRef, image);
-                            imageUrl = await getDownloadURL(imageRef);
-                        }
-                        const newExpiryDate = new Date();
-                        newExpiryDate.setMonth(newExpiryDate.getMonth() + 1);
-                        const dataToSend = {
-                            ...formData,
-                            profilePictureUrl: imageUrl,
-                            userId: user?.uid,
-                            status: "pending",
-                            timestamp: serverTimestamp(),
-                            subscriptionId: subscriptionData.id,
-                            paymentId: response.razorpay_payment_id,
-                            subscriptionStatus: 'active',
-                            subscriptionExpiresAt: newExpiryDate,
-                        };
-                        if (existingApplication) {
-                            await updateDoc(doc(db, "creatorApplications", existingApplication.id), dataToSend);
-                        } else {
-                            await addDoc(collection(db, "creatorApplications"), dataToSend);
-                        }
-                        setShowSuccessModal(true);
-                    },
-                    prefill: {
-                        name: formData.fullName,
-                        email: formData.emailAddress,
-                        contact: formData.mobileNumber
-                    },
-                    theme: { color: "#7e22ce" }, // Purple color
-                };
-
-                const rzp = new window.Razorpay(options);
-                rzp.open();
-                rzp.on('payment.failed', function (response: RazorpayErrorResponse) {
-                    alert(`Payment failed: ${response.error.description}`);
-                    console.error(response.error);
-                });
-            } catch (err: unknown) {
-                console.error("Error during subscription or submission:", err);
-                if (err instanceof Error) {
-                    alert(`An error occurred: ${err.message}`);
-                } else {
-                    alert("An unknown error occurred.");
-                }
-            } finally {
-                setUploading(false);
+            if (existingApplication) {
+                await updateDoc(doc(db, "creatorApplications", existingApplication.id), dataToSend);
+            } else {
+                await addDoc(collection(db, "creatorApplications"), { ...dataToSend, timestamp: serverTimestamp() }); // Set timestamp for new applications
             }
+            setShowSuccessModal(true);
+        } catch (err: unknown) {
+            console.error("Error submitting/updating creator application:", err);
+            if (err instanceof Error) {
+                alert(`An error occurred: ${err.message}`);
+            } else {
+                alert("An unknown error occurred.");
+            }
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -414,6 +321,7 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
             </div>
 
             <div className="p-4 sm:p-6 md:p-8">
+                {/* Subscription status display remains, but no payment action associated */}
                 {isSubscribed && (
                     <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-300 shadow-sm flex items-center">
                         <span className="text-purple-900 font-medium text-xs sm:text-sm">
@@ -582,7 +490,7 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
                                     </svg>
                                     Processing...
                                 </>
-                            ) : isSubscribed ? (existingApplication ? "Update Application" : "Submit Application") : (existingApplication ? "Resubscribe & Update" : "Subscribe & Submit")}
+                            ) : existingApplication ? "Update Application" : "Submit Application"}
                         </button>
 
                         <button
@@ -734,17 +642,6 @@ function ApplicationStatus({ application }: ApplicationStatusProps) {
                                 </div>
                             </div>
                         </div>
-                        {application.status === "rejected" && application.adminFeedback && (
-                            <div className="mt-5 bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
-                                <h3 className="font-medium text-red-800 mb-1 sm:mb-2 flex items-center text-sm sm:text-base">
-                                    <svg className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    Admin Feedback
-                                </h3>
-                                <p className="text-red-700 text-sm sm:text-base">{application.adminFeedback}</p>
-                            </div>
-                        )}
                     </div>
                 </div>
                 <div className="mt-6 sm:mt-8 pt-5 border-t border-gray-200">
