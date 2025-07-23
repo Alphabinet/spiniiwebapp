@@ -366,19 +366,24 @@ const CampaignCreationPage = () => {
             const data = await response.json();
 
             if (data.success && data.payment_session_id) {
-                const cashfree = window.Cashfree({ mode: "sandbox" }); // Use "production" for live
+                const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE as "sandbox" | "production";
+
+                if (!cashfreeMode) {
+                    toast.error("Payment gateway mode is not configured. Cannot proceed.");
+                    setPaymentStatus('failed');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const cashfree = window.Cashfree({ mode: cashfreeMode });
                 cashfree.checkout({
                     paymentSessionId: data.payment_session_id,
                     redirectTarget: "_self",
                 });
-                // Note: The user will be redirected. The final status update
-                // should be handled on a dedicated status page or via webhooks.
-                // We will move to confirmation step optimistically, but real status
-                // depends on the redirect.
             } else {
                 toast.error(data.message || "Could not initiate payment.");
                 setPaymentStatus('failed');
-                setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
+                setCurrentStep(currentStep + 1); 
             }
         } catch (err) {
             console.error('An error occurred during payment setup.', err);
@@ -698,7 +703,12 @@ const CampaignCreationPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsCashfreeReady(true)} strategy="lazyOnload" />
+            {/* --- FIX: Changed script loading strategy to 'beforeInteractive' for faster loading --- */}
+            <Script
+                src="https://sdk.cashfree.com/js/v3/cashfree.js"
+                onLoad={() => setIsCashfreeReady(true)}
+                strategy="beforeInteractive"
+            />
             <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">

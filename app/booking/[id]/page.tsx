@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { format } from 'date-fns';
 import { CalendarIcon, CheckCircle, Loader2, XCircle, Info, ArrowLeft, ShoppingCart, Mail, Phone, MapPin } from "lucide-react";
-import { User } from 'firebase/auth'; // Import User type
-import Image from 'next/image'; // Import Next.js Image component
-import Script from 'next/script'; // Import the Next.js Script component
+import { User } from 'firebase/auth';
+import Image from 'next/image';
+import Script from 'next/script';
 
 // --- Type Definitions ---
 interface CashfreeOptions {
@@ -42,22 +42,22 @@ declare global {
 interface Creator {
     id: string;
     fullName: string;
-    profilePictureUrl: string; // Added to Creator interface for display
-    instagramUsername: string; // Added for display and notes
-    instagramProfileLink: string; // Added for display and notes
-    totalFollowers: string; // Added for display and notes
-    avgReelViews: string; // Added for display and notes
-    storyAverageViews: string; // Added for display and notes
-    cityState: string; // Added for display and notes
-    gender: string; // Added for display and notes
-    contentCategory: string; // Added for display and notes
-    contentLanguages: string; // Added for display and notes
-    reelPrice: string; // Added for calculations
-    storyPrice: string; // Added for calculations
-    reelsStoryPrice: string; // Added for calculations
-    deliveryDuration: string; // Added for notes
-    emailAddress: string; // Added for notes
-    mobileNumber: string; // Added for notes
+    profilePictureUrl: string;
+    instagramUsername: string;
+    instagramProfileLink: string;
+    totalFollowers: string;
+    avgReelViews: string;
+    storyAverageViews: string;
+    cityState: string;
+    gender: string;
+    contentCategory: string;
+    contentLanguages: string;
+    reelPrice: string;
+    storyPrice: string;
+    reelsStoryPrice: string;
+    deliveryDuration: string;
+    emailAddress: string;
+    mobileNumber: string;
 }
 
 interface BookingData {
@@ -90,7 +90,7 @@ const BookingPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [isSDKReady, setIsSDKReady] = useState(false); // State for Cashfree SDK readiness
+    const [isSDKReady, setIsSDKReady] = useState(false);
     const [bookingData, setBookingData] = useState<BookingData>({
         step: 1,
         services: { reels: 0, story: 0, reelsStory: 0 },
@@ -102,16 +102,14 @@ const BookingPage: React.FC = () => {
     const { step, services, campaign, bookerDetails, payment } = bookingData;
     const [showCalendar, setShowCalendar] = useState(false);
 
-    // --- Define steps with the new Step 5 ---
     const steps = useMemo(() => [
         { number: 1, label: "Services" },
         { number: 2, label: "Campaign" },
         { number: 3, label: "Your Details" },
         { number: 4, label: "Confirm" },
-        { number: 5, label: "Confirmation" }, // New Step 5
+        { number: 5, label: "Confirmation" },
     ], []);
 
-    // --- Fetch Creator Data based on ID from URL ---
     const fetchCreator = useCallback(async () => {
         if (!id) {
             setError("Creator ID is missing.");
@@ -144,7 +142,6 @@ const BookingPage: React.FC = () => {
         return () => unsubscribe();
     }, [fetchCreator]);
 
-    // --- Calculate subtotal price (excluding service charge) ---
     const getPrice = useCallback((priceString: string) => {
         return parseInt(priceString?.replace(/,/g, '') || '0') || 0;
     }, []);
@@ -157,12 +154,10 @@ const BookingPage: React.FC = () => {
         return reelsPrice + storyPrice + comboPrice;
     }, [services, creator, getPrice]);
 
-    // --- Calculate grand total price (including service charge) ---
     const grandTotalPrice = useMemo(() => {
         return subTotalPrice + SERVICE_CHARGE;
     }, [subTotalPrice]);
 
-    // --- State Handlers ---
     const handleServiceChange = (serviceType: 'reels' | 'story' | 'reelsStory', value: string) => {
         const count = parseInt(value);
         setBookingData(prev => ({
@@ -209,11 +204,9 @@ const BookingPage: React.FC = () => {
         }));
     };
 
-    // --- Validation ---
     const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const isValidPhone = (phone: string) => /^\d{10,}$/.test(phone.replace(/\D/g, ''));
 
-    // --- Step Navigation ---
     const handleNextStep = () => {
         let isValid = true;
         let errorMessage = "";
@@ -269,77 +262,6 @@ const BookingPage: React.FC = () => {
 
     const handlePrevStep = () => {
         setBookingData(prev => ({ ...prev, step: prev.step - 1 }));
-    };
-
-    // --- Firestore & Payment Logic ---
-    const saveBookingToFirestore = async (transactionId: string) => {
-        if (!currentUser) throw new Error("User not authenticated");
-        if (!creator) throw new Error("Creator data not available.");
-
-        let demoVideoUrl = '';
-        if (campaign.demoVideo) {
-            try {
-                const storageRef = ref(storage, `bookings/${currentUser.uid}/${Date.now()}_${campaign.demoVideo.name}`);
-                await uploadBytes(storageRef, campaign.demoVideo);
-                demoVideoUrl = await getDownloadURL(storageRef);
-            } catch (error) {
-                console.error("Error uploading demo video:", error);
-                toast({ title: "Upload Error", description: "Failed to upload demo video. Booking saved without it.", variant: "destructive" });
-            }
-        }
-
-        const bookingPayload = {
-            userId: currentUser.uid,
-            userEmail: currentUser.email || bookerDetails.email,
-            creatorId: creator.id,
-            creatorName: creator.fullName,
-            creatorUsername: creator.instagramUsername,
-            creatorProfileLink: creator.instagramProfileLink,
-            creatorDetails: {
-                totalFollowers: creator.totalFollowers,
-                avgReelViews: creator.avgReelViews,
-                storyAverageViews: creator.storyAverageViews,
-                cityState: creator.cityState,
-                gender: creator.gender,
-                contentCategory: creator.contentCategory,
-                contentLanguages: creator.contentLanguages,
-                reelPrice: creator.reelPrice,
-                storyPrice: creator.storyPrice,
-                reelsStoryPrice: creator.reelsStoryPrice,
-                deliveryDuration: creator.deliveryDuration,
-                creatorEmailAddress: creator.emailAddress,
-                creatorMobileNumber: creator.mobileNumber,
-            },
-            services: services,
-            campaign: {
-                name: campaign.name,
-                description: campaign.description,
-                deadline: campaign.deadline ? Timestamp.fromDate(campaign.deadline) : null,
-                demoVideoUrl,
-                demoVideoName: campaign.demoVideo?.name || null,
-            },
-            bookerDetails,
-            payment: {
-                status: 'success',
-                transactionId,
-                amount: grandTotalPrice,
-                currency: 'INR'
-            },
-            subTotalPrice,
-            serviceCharge: SERVICE_CHARGE,
-            grandTotalPrice,
-            createdAt: Timestamp.now(),
-            status: 'pending' as const
-        };
-
-        try {
-            const bookingRef = doc(db, "bookings", transactionId);
-            await setDoc(bookingRef, bookingPayload);
-            return true;
-        } catch (error) {
-            console.error("Error saving booking:", error);
-            throw new Error("Failed to save booking details to database.");
-        }
     };
 
     const handleSubmitBooking = async () => {
@@ -413,13 +335,20 @@ const BookingPage: React.FC = () => {
             const data = await response.json();
 
             if (data.success && data.payment_session_id) {
-                const cashfree = (window as any).Cashfree({ mode: "sandbox" }); // Use "production" for live
+                const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE as "sandbox" | "production";
+
+                if (!cashfreeMode) {
+                    toast({ title: "Configuration Error", description: "Payment gateway mode is not configured.", variant: "destructive" });
+                    setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: 'Client configuration error.' } }));
+                    return;
+                }
+
+                const cashfree = (window as any).Cashfree({ mode: cashfreeMode });
                 cashfree.checkout({
                     paymentSessionId: data.payment_session_id,
-                    redirectTarget: "_self", // Or "_blank" if you want a new tab
+                    redirectTarget: "_self",
                 });
 
-                // Set payment status to processing (will be updated by Cashfree webhook/redirect)
                 setBookingData(prev => ({
                     ...prev,
                     payment: {
@@ -431,20 +360,15 @@ const BookingPage: React.FC = () => {
             } else {
                 toast({ title: "Payment Error", description: data.message || "Could not initiate payment.", variant: "destructive" });
                 setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: data.message } }));
-                // In case of API failure, revert to previous step or keep on step 4
-                // For simplicity here, let's keep it on step 4 with failed status.
-                // You might want to move to step 5 to display a detailed failure message.
             }
         } catch (error) {
             console.error("Booking processing error:", error);
             toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
             setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: 'An unexpected error occurred.' } }));
-            // Move to step 5 to display detailed failure message
             setBookingData(prev => ({ ...prev, step: 5 }));
         }
     };
 
-    // --- UI Components for steps ---
     const ServiceCard = ({ type, label, description, price }: { type: 'reels' | 'story' | 'reelsStory'; label: string; description: string; price: string; }) => (
         <div className={cn(
             "bg-gradient-to-br from-white to-gray-50 p-6 rounded-xl border-2 shadow-sm flex flex-col md:flex-row items-center justify-between transition-all",
@@ -487,9 +411,8 @@ const BookingPage: React.FC = () => {
         </div>
     );
 
-
     const renderStepContent = () => {
-        if (!creator) return null; // Ensure creator data is available
+        if (!creator) return null;
         switch (step) {
             case 1:
                 return (
@@ -500,7 +423,6 @@ const BookingPage: React.FC = () => {
                                 Choose the services you want to book
                             </span>
                         </h3>
-
                         <div className="space-y-4">
                             <ServiceCard
                                 type="reels"
@@ -508,14 +430,12 @@ const BookingPage: React.FC = () => {
                                 description="Short-form video content for engaging your audience"
                                 price={creator.reelPrice}
                             />
-
                             <ServiceCard
                                 type="story"
                                 label="Story Post"
                                 description="24-hour disappearing content for quick updates"
                                 price={creator.storyPrice}
                             />
-
                             <ServiceCard
                                 type="reelsStory"
                                 label="Reels + Story Combo"
@@ -523,7 +443,6 @@ const BookingPage: React.FC = () => {
                                 price={creator.reelsStoryPrice}
                             />
                         </div>
-
                         <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-200 mt-4">
                             <div className="flex justify-between items-center">
                                 <div>
@@ -542,7 +461,6 @@ const BookingPage: React.FC = () => {
                         </div>
                     </div>
                 );
-
             case 2:
                 return (
                     <div className="space-y-6">
@@ -552,7 +470,6 @@ const BookingPage: React.FC = () => {
                                 Tell us about your campaign
                             </span>
                         </h3>
-
                         <div>
                             <Label htmlFor="campaignName" className="mb-2 block text-gray-700 flex items-center">
                                 Campaign Name <span className="text-purple-500 ml-1">*</span>
@@ -566,7 +483,6 @@ const BookingPage: React.FC = () => {
                                 className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
                         </div>
-
                         <div>
                             <Label htmlFor="campaignDescription" className="mb-2 block text-gray-700 flex items-center">
                                 Campaign Description <span className="text-purple-500 ml-1">*</span>
@@ -582,12 +498,10 @@ const BookingPage: React.FC = () => {
                                 className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
                         </div>
-
                         <div>
                             <Label htmlFor="campaignDeadline" className="mb-2 block text-gray-700 flex items-center">
                                 Deadline <span className="text-purple-500 ml-1">*</span>
                             </Label>
-
                             <Button
                                 variant="outline"
                                 onClick={() => setShowCalendar(!showCalendar)}
@@ -599,7 +513,6 @@ const BookingPage: React.FC = () => {
                                 <CalendarIcon className="mr-2 h-4 w-4 text-gray-600" />
                                 {campaign.deadline ? format(campaign.deadline, "PPP") : "Select a date"}
                             </Button>
-
                             {showCalendar && (
                                 <div className="mt-4 flex justify-center">
                                     <Calendar
@@ -613,7 +526,6 @@ const BookingPage: React.FC = () => {
                                 </div>
                             )}
                         </div>
-
                         <div>
                             <Label htmlFor="demoVideo" className="mb-2 block text-gray-700">
                                 Upload Demo Video (Optional)
@@ -634,7 +546,6 @@ const BookingPage: React.FC = () => {
                         </div>
                     </div>
                 );
-
             case 3:
                 return (
                     <div className="space-y-6">
@@ -644,7 +555,6 @@ const BookingPage: React.FC = () => {
                                 Where we&apos;ll send booking confirmation
                             </span>
                         </h3>
-
                         <div>
                             <Label htmlFor="bookerFullName" className="mb-2 block text-gray-700 flex items-center">
                                 Full Name <span className="text-purple-500 ml-1">*</span>
@@ -658,7 +568,6 @@ const BookingPage: React.FC = () => {
                                 className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <Label htmlFor="bookerEmail" className="mb-2 block text-gray-700 flex items-center">
@@ -674,7 +583,6 @@ const BookingPage: React.FC = () => {
                                     className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                                 />
                             </div>
-
                             <div>
                                 <Label htmlFor="bookerPhoneNumber" className="mb-2 block text-gray-700 flex items-center">
                                     Phone Number <span className="text-purple-500 ml-1">*</span>
@@ -690,7 +598,6 @@ const BookingPage: React.FC = () => {
                                 />
                             </div>
                         </div>
-
                         <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 mt-2">
                             <div className="flex">
                                 <Info className="h-5 w-5 text-purple-600 mr-3 flex-shrink-0 mt-0.5" />
@@ -702,7 +609,6 @@ const BookingPage: React.FC = () => {
                         </div>
                     </div>
                 );
-
             case 4:
                 return (
                     <div className="space-y-8">
@@ -712,8 +618,6 @@ const BookingPage: React.FC = () => {
                                 Review your order details before confirming
                             </span>
                         </h3>
-
-                        {/* Creator Info Card - Enhanced details */}
                         <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                             <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                                 Creator Info
@@ -755,13 +659,10 @@ const BookingPage: React.FC = () => {
                                 <div><span className="font-medium text-gray-600">Delivery:</span> {creator.deliveryDuration} days</div>
                             </div>
                         </div>
-
-                        {/* Services Summary with Service Charge */}
                         <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-6 border border-purple-200">
                             <h4 className="text-lg font-bold text-purple-700 mb-4 pb-2 border-b border-purple-100">
                                 Service & Payment Summary
                             </h4>
-
                             <div className="space-y-3">
                                 {services.reels > 0 && (
                                     <div className="flex justify-between">
@@ -769,21 +670,18 @@ const BookingPage: React.FC = () => {
                                         <span className="font-medium">₹{(getPrice(creator.reelPrice) * services.reels).toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
-
                                 {services.story > 0 && (
                                     <div className="flex justify-between">
                                         <span>Story × {services.story}</span>
                                         <span className="font-medium">₹{(getPrice(creator.storyPrice) * services.story).toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
-
                                 {services.reelsStory > 0 && (
                                     <div className="flex justify-between">
                                         <span>Reels + Story × {services.reelsStory}</span>
                                         <span className="font-medium">₹{(getPrice(creator.reelsStoryPrice) * services.reelsStory).toLocaleString('en-IN')}</span>
                                     </div>
                                 )}
-
                                 <div className="pt-4 mt-4 border-t border-purple-100">
                                     <div className="flex justify-between text-base font-semibold">
                                         <span>Subtotal</span>
@@ -802,7 +700,6 @@ const BookingPage: React.FC = () => {
                                 </div>
                             </div>
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                                 <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
@@ -831,7 +728,6 @@ const BookingPage: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-
                             <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                                 <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                                     Your Details
@@ -854,8 +750,7 @@ const BookingPage: React.FC = () => {
                         </div>
                     </div>
                 );
-
-            case 5: // New Confirmation Step for Cashfree
+            case 5:
                 return (
                     <div className="space-y-8">
                         <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -864,7 +759,6 @@ const BookingPage: React.FC = () => {
                                 Your booking outcome and next steps
                             </span>
                         </h3>
-
                         {payment.status === 'processing' && (
                             <div className="flex flex-col items-center justify-center py-6">
                                 <Loader2 className="h-12 w-12 text-purple-600 animate-spin mb-4" />
@@ -876,7 +770,6 @@ const BookingPage: React.FC = () => {
                                 </p>
                             </div>
                         )}
-
                         {payment.status === 'success' && (
                             <div className="bg-green-50 rounded-xl p-6 border border-green-200">
                                 <div className="flex flex-col items-center text-center">
@@ -887,7 +780,6 @@ const BookingPage: React.FC = () => {
                                     <p className="text-green-700 text-lg">
                                         Your booking with {creator.fullName} is confirmed
                                     </p>
-
                                     <div className="mt-6 bg-white p-4 rounded-lg border border-green-200 w-full max-w-md">
                                         <h5 className="font-bold text-gray-800 mb-3">Booking Summary</h5>
                                         <div className="space-y-2 text-left">
@@ -913,15 +805,12 @@ const BookingPage: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
-
                                     <p className="text-sm text-gray-600 mt-6">
                                         We&apos;ve sent booking details to {bookerDetails.email}
                                     </p>
                                     <p className="text-sm text-gray-600 mt-2">
                                         You can view your bookings in the &quot;My Orders&quot; section
                                     </p>
-
-                                    {/* Business Contact Details */}
                                     <div className="mt-8 bg-purple-50 p-4 rounded-lg border border-purple-200">
                                         <h5 className="font-bold text-purple-800 mb-3">Need assistance? Contact us!</h5>
                                         <div className="flex flex-col items-start text-left space-y-2 text-sm text-purple-700">
@@ -942,7 +831,6 @@ const BookingPage: React.FC = () => {
                                 </div>
                             </div>
                         )}
-
                         {payment.status === 'failed' && (
                             <div className="bg-red-50 rounded-xl p-6 border border-red-200">
                                 <div className="flex flex-col items-center text-center">
@@ -966,7 +854,6 @@ const BookingPage: React.FC = () => {
                         )}
                     </div>
                 );
-
             default:
                 return null;
         }
@@ -1007,9 +894,12 @@ const BookingPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 p-6 flex items-center justify-center">
-            {/* Cashfree SDK Script */}
-            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} strategy="afterInteractive" />
-
+            {/* --- FIX: Changed script loading strategy to 'beforeInteractive' for faster loading --- */}
+            <Script 
+                src="https://sdk.cashfree.com/js/v3/cashfree.js" 
+                onLoad={() => setIsSDKReady(true)} 
+                strategy="beforeInteractive" 
+            />
             <div className="w-full sm:max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
@@ -1019,8 +909,6 @@ const BookingPage: React.FC = () => {
                         <ArrowLeft className="mr-2 h-5 w-5" /> Back to Profile
                     </Button>
                 </div>
-
-                {/* Step Indicator */}
                 <div className="mt-6">
                     <div className="flex justify-between mb-2">
                         <span className="text-sm font-medium text-gray-700">
@@ -1030,7 +918,6 @@ const BookingPage: React.FC = () => {
                             {Math.round((step / steps.length) * 100)}% Complete
                         </span>
                     </div>
-
                     <div className="relative w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div
                             className="absolute left-0 top-0 h-full bg-purple-500 rounded-full transition-all duration-500"
@@ -1038,14 +925,10 @@ const BookingPage: React.FC = () => {
                         ></div>
                     </div>
                 </div>
-
                 <div className="py-6 overflow-y-auto max-h-[70vh] pr-2">
                     {renderStepContent()}
                 </div>
-
-                {/* Navigation Buttons */}
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:space-x-2 pt-6 border-t border-gray-100">
-                    {/* Back button: visible on steps > 1 and < 5, only if payment is idle */}
                     {step > 1 && step < steps.length && payment.status === 'idle' && (
                         <Button
                             variant="outline"
@@ -1055,8 +938,6 @@ const BookingPage: React.FC = () => {
                             Back
                         </Button>
                     )}
-
-                    {/* Next button: visible on steps < 4, only if payment is idle */}
                     {step < steps.length - 1 && payment.status === 'idle' && (
                         <Button
                             onClick={handleNextStep}
@@ -1065,8 +946,6 @@ const BookingPage: React.FC = () => {
                             Next
                         </Button>
                     )}
-
-                    {/* Confirm & Pay button: visible only on step 4, only if payment is idle */}
                     {step === 4 && payment.status === 'idle' && (
                         <Button
                             onClick={handleSubmitBooking}
@@ -1085,8 +964,6 @@ const BookingPage: React.FC = () => {
                             )}
                         </Button>
                     )}
-
-                    {/* Buttons specific to Step 5 (Confirmation) */}
                     {step === 5 && payment.status === 'success' && (
                         <Button
                             onClick={() => router.push(`/creator/${creator?.id}`)}
@@ -1097,7 +974,7 @@ const BookingPage: React.FC = () => {
                     )}
                     {step === 5 && payment.status === 'failed' && (
                         <Button
-                            onClick={() => setBookingData(prev => ({ ...prev, payment: { status: 'idle' }, step: 4 }))} // Go back to Step 4 to try again
+                            onClick={() => setBookingData(prev => ({ ...prev, payment: { status: 'idle' }, step: 4 }))}
                             className="w-full sm:w-auto px-6 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
                         >
                             Try Again
