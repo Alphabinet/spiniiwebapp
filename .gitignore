@@ -37,3 +37,4 @@ Thumbs.db
 # -------------------------------
 # Shell scripts or generated JS
 setCors.js
+.env.local
