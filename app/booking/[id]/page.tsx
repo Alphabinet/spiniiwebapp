@@ -1,9 +1,8 @@
-// app/booking/[id]/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { doc, getDoc, Timestamp, setDoc } from 'firebase/firestore';
+import { useParams, useRouter } from "next/navigation";
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,29 +15,49 @@ import { cn } from "@/lib/utils";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { format } from 'date-fns';
 import { CalendarIcon, CheckCircle, Loader2, XCircle, Info, ArrowLeft, ShoppingCart, Mail, Phone, MapPin } from "lucide-react";
-import { User } from 'firebase/auth';
-import Image from 'next/image';
+import { User } from 'firebase/auth'; // Import User type
+import Image from 'next/image'; // Import Next.js Image component
+import Script from 'next/script'; // Import the Next.js Script component
 
 // --- Type Definitions ---
+interface CashfreeOptions {
+    mode: "sandbox" | "production";
+}
+
+interface CashfreeCheckoutPayload {
+    paymentSessionId: string;
+    redirectTarget: "_self" | "_blank";
+}
+
+interface Cashfree {
+    checkout(payload: CashfreeCheckoutPayload): void;
+}
+
+declare global {
+    interface Window {
+        Cashfree: (options: CashfreeOptions) => Cashfree;
+    }
+}
+
 interface Creator {
     id: string;
     fullName: string;
-    profilePictureUrl: string;
-    instagramUsername: string;
-    instagramProfileLink: string;
-    totalFollowers: string;
-    avgReelViews: string;
-    storyAverageViews: string;
-    cityState: string;
-    gender: string;
-    contentCategory: string;
-    contentLanguages: string;
-    reelPrice: string;
-    storyPrice: string;
-    reelsStoryPrice: string;
-    deliveryDuration: string;
-    emailAddress: string;
-    mobileNumber: string;
+    profilePictureUrl: string; // Added to Creator interface for display
+    instagramUsername: string; // Added for display and notes
+    instagramProfileLink: string; // Added for display and notes
+    totalFollowers: string; // Added for display and notes
+    avgReelViews: string; // Added for display and notes
+    storyAverageViews: string; // Added for display and notes
+    cityState: string; // Added for display and notes
+    gender: string; // Added for display and notes
+    contentCategory: string; // Added for display and notes
+    contentLanguages: string; // Added for display and notes
+    reelPrice: string; // Added for calculations
+    storyPrice: string; // Added for calculations
+    reelsStoryPrice: string; // Added for calculations
+    deliveryDuration: string; // Added for notes
+    emailAddress: string; // Added for notes
+    mobileNumber: string; // Added for notes
 }
 
 interface BookingData {
@@ -56,20 +75,14 @@ interface BookingData {
         email: string;
         phoneNumber: string;
     };
-    payment: {
-        status: 'idle' | 'processing' | 'success' | 'failed';
-        message?: string;
-        transactionId?: string; // Your internal order ID (txnid)
-        payuPaymentId?: string; // PayU's transaction ID (mihpayid)
-    };
+    payment: { status: 'idle' | 'processing' | 'success' | 'failed'; message?: string; transactionId?: string };
 }
 
+// Main page component
 const BookingPage: React.FC = () => {
-    const params = useParams();
-    const id = params.id as string;
+    const { id } = useParams<{ id: string }>();
     const router = useRouter();
     const { toast } = useToast();
-    const searchParams = useSearchParams();
 
     const SERVICE_CHARGE = 99;
 
@@ -77,7 +90,7 @@ const BookingPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [paymentLoading, setPaymentLoading] = useState(false);
+    const [isSDKReady, setIsSDKReady] = useState(false); // State for Cashfree SDK readiness
     const [bookingData, setBookingData] = useState<BookingData>({
         step: 1,
         services: { reels: 0, story: 0, reelsStory: 0 },
@@ -85,19 +98,20 @@ const BookingPage: React.FC = () => {
         bookerDetails: { fullName: '', email: '', phoneNumber: '' },
         payment: { status: 'idle' }
     });
-    const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
 
     const { step, services, campaign, bookerDetails, payment } = bookingData;
     const [showCalendar, setShowCalendar] = useState(false);
 
+    // --- Define steps with the new Step 5 ---
     const steps = useMemo(() => [
         { number: 1, label: "Services" },
         { number: 2, label: "Campaign" },
         { number: 3, label: "Your Details" },
         { number: 4, label: "Confirm" },
-        { number: 5, label: "Confirmation" },
+        { number: 5, label: "Confirmation" }, // New Step 5
     ], []);
 
+    // --- Fetch Creator Data based on ID from URL ---
     const fetchCreator = useCallback(async () => {
         if (!id) {
             setError("Creator ID is missing.");
@@ -122,68 +136,15 @@ const BookingPage: React.FC = () => {
         }
     }, [id]);
 
-    // Handle initial load and potential redirects from PayU
     useEffect(() => {
         fetchCreator();
-        const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
             setCurrentUser(user);
         });
+        return () => unsubscribe();
+    }, [fetchCreator]);
 
-        // This useEffect runs on mount and when searchParams change (after PayU redirect)
-        const txnidFromUrl = searchParams.get('txnid');
-        const statusFromUrl = searchParams.get('status'); // 'success' or 'failed' from backend redirect
-
-        if (txnidFromUrl && statusFromUrl) {
-            // This means we've returned from PayU checkout via our backend API route.
-            // The backend API route (verify-payment) should have already updated Firestore.
-            // Now, we just need to fetch the updated booking from Firestore
-            // and update the `bookingData` state to show the result on Step 5.
-            const handlePayuReturn = async () => {
-                setPaymentLoading(true);
-                setBookingData(prev => ({ ...prev, payment: { status: 'processing', message: 'Verifying payment status...' }, step: 5 }));
-
-                try {
-                    const bookingDocRef = doc(db, "bookings", txnidFromUrl);
-                    const bookingDocSnap = await getDoc(bookingDocRef);
-
-                    if (bookingDocSnap.exists()) {
-                        const bookingInfo = bookingDocSnap.data();
-                        setBookingData(prev => ({
-                            ...prev,
-                            payment: {
-                                status: bookingInfo.payment?.status || 'failed',
-                                message: bookingInfo.payment?.message || 'Payment status unknown.',
-                                transactionId: bookingInfo.payment?.transactionId,
-                                payuPaymentId: bookingInfo.payment?.payuPaymentId,
-                            },
-                            step: 5
-                        }));
-
-                        if (bookingInfo.payment?.status === 'success') {
-                            toast({ title: "Booking Confirmed!", description: "Your payment was successful.", variant: "success", className: "bg-green-100 text-green-800" });
-                        } else {
-                            toast({ title: "Payment Failed", description: bookingInfo.payment?.message || "Your payment could not be processed.", variant: "destructive" });
-                        }
-                    } else {
-                        setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: 'Booking details not found after payment.' }, step: 5 }));
-                        toast({ title: "Payment Error", description: "Booking details not found after payment. Please contact support.", variant: "destructive" });
-                    }
-                } catch (err) {
-                    console.error("Error handling PayU return:", err);
-                    setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: 'Error verifying payment after return.' }, step: 5 }));
-                    toast({ title: "Payment Error", description: "An error occurred while verifying your payment.", variant: "destructive" });
-                } finally {
-                    setPaymentLoading(false);
-                }
-            };
-
-            handlePayuReturn();
-        }
-
-        return () => unsubscribeAuth();
-    }, [fetchCreator, searchParams, toast]);
-
-
+    // --- Calculate subtotal price (excluding service charge) ---
     const getPrice = useCallback((priceString: string) => {
         return parseInt(priceString?.replace(/,/g, '') || '0') || 0;
     }, []);
@@ -196,10 +157,12 @@ const BookingPage: React.FC = () => {
         return reelsPrice + storyPrice + comboPrice;
     }, [services, creator, getPrice]);
 
+    // --- Calculate grand total price (including service charge) ---
     const grandTotalPrice = useMemo(() => {
         return subTotalPrice + SERVICE_CHARGE;
     }, [subTotalPrice]);
 
+    // --- State Handlers ---
     const handleServiceChange = (serviceType: 'reels' | 'story' | 'reelsStory', value: string) => {
         const count = parseInt(value);
         setBookingData(prev => ({
@@ -212,21 +175,19 @@ const BookingPage: React.FC = () => {
     };
 
     const handleCampaignChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value, id } = e.target;
+        const { name, value } = e.target;
         setBookingData(prev => ({
             ...prev,
             campaign: { ...prev.campaign, [name]: value }
         }));
-        setValidationErrors(prev => ({ ...prev, [id]: false }));
     };
 
     const handleBookerDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, id } = e.target;
+        const { name, value } = e.target;
         setBookingData(prev => ({
             ...prev,
             bookerDetails: { ...prev.bookerDetails, [name]: value }
         }));
-        setValidationErrors(prev => ({ ...prev, [id]: false }));
     };
 
     const handleDeadlineChange = (date: Date | undefined) => {
@@ -238,7 +199,6 @@ const BookingPage: React.FC = () => {
             }
         }));
         setShowCalendar(false);
-        setValidationErrors(prev => ({ ...prev, campaignDeadline: false }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,14 +209,14 @@ const BookingPage: React.FC = () => {
         }));
     };
 
+    // --- Validation ---
     const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const isValidPhone = (phone: string) => /^\d{10,}$/.test(phone.replace(/\D/g, ''));
 
+    // --- Step Navigation ---
     const handleNextStep = () => {
         let isValid = true;
-        const newErrors: Record<string, boolean> = {};
         let errorMessage = "";
-
         switch (step) {
             case 1:
                 if (subTotalPrice <= 0) {
@@ -265,50 +225,34 @@ const BookingPage: React.FC = () => {
                 }
                 break;
             case 2:
-                if (!campaign.name) {
+                if (!campaign.name || !campaign.description || campaign.deadline === null) {
                     isValid = false;
-                    newErrors.campaignName = true;
-                }
-                if (!campaign.description) {
+                    errorMessage = "Please fill in all campaign details (Name, Description, Deadline).";
+                } else if (campaign.deadline && campaign.deadline < new Date()) {
                     isValid = false;
-                    newErrors.campaignDescription = true;
-                }
-                if (campaign.deadline === null || (campaign.deadline && campaign.deadline < new Date())) {
-                    isValid = false;
-                    newErrors.campaignDeadline = true;
-                    if (campaign.deadline === null) {
-                        errorMessage = "Campaign deadline is required.";
-                    } else if (campaign.deadline < new Date()) {
-                        errorMessage = "Deadline must be a future date.";
-                    }
-                }
-                if (!isValid && !errorMessage) {
-                    errorMessage = "Please fill in all required campaign details.";
+                    errorMessage = "Deadline must be a future date.";
                 }
                 break;
             case 3:
-                if (!bookerDetails.fullName) {
+                if (!bookerDetails.fullName || !bookerDetails.email || !bookerDetails.phoneNumber) {
                     isValid = false;
-                    newErrors.bookerFullName = true;
-                }
-                if (!bookerDetails.email || !isValidEmail(bookerDetails.email)) {
+                    errorMessage = "Please fill in all your details (Full Name, Email, Phone Number).";
+                } else if (!isValidEmail(bookerDetails.email)) {
                     isValid = false;
-                    newErrors.bookerEmail = true;
-                    if (!bookerDetails.email) errorMessage = "Email address is required.";
-                    else if (!isValidEmail(bookerDetails.email)) errorMessage = "Please enter a valid email address.";
-                }
-                if (!bookerDetails.phoneNumber || !isValidPhone(bookerDetails.phoneNumber)) {
+                    errorMessage = "Please enter a valid email address.";
+                } else if (!isValidPhone(bookerDetails.phoneNumber)) {
                     isValid = false;
-                    newErrors.bookerPhoneNumber = true;
-                    if (!bookerDetails.phoneNumber) errorMessage = "Phone number is required.";
-                    else if (!isValidPhone(bookerDetails.phoneNumber)) errorMessage = "Please enter a valid 10-digit phone number.";
-                }
-                if (!isValid && !errorMessage) {
-                    errorMessage = "Please fill in all your required details.";
+                    errorMessage = "Please enter a valid phone number (at least 10 digits).";
                 }
                 break;
             case 4:
-                if (grandTotalPrice > 0 && payment.status !== 'success') {
+                if (payment.status === 'processing') {
+                    isValid = false;
+                    errorMessage = "Payment is still processing. Please wait.";
+                } else if (payment.status === 'failed') {
+                    isValid = false;
+                    errorMessage = "Payment failed. Please try again.";
+                } else if (payment.status === 'idle' && grandTotalPrice > 0) {
                     isValid = false;
                     errorMessage = "Please complete the payment to proceed.";
                 }
@@ -316,167 +260,191 @@ const BookingPage: React.FC = () => {
             default: break;
         }
 
-        setValidationErrors(newErrors);
-
         if (!isValid) {
-            toast({ title: "Validation Error", description: errorMessage || "Please correct the highlighted fields.", variant: "destructive" });
+            toast({ title: "Validation Error", description: errorMessage, variant: "destructive" });
             return;
         }
-
-        if (step === 4 && grandTotalPrice > 0 && payment.status !== 'success') {
-            toast({ title: "Action Required", description: "Please complete the payment.", variant: "destructive" });
-            return;
-        }
-
-        setValidationErrors({});
         setBookingData(prev => ({ ...prev, step: prev.step + 1 }));
     };
 
     const handlePrevStep = () => {
         setBookingData(prev => ({ ...prev, step: prev.step - 1 }));
-        setValidationErrors({});
     };
 
-    // --- Core Payment Logic (PayU) ---
+    // --- Firestore & Payment Logic ---
+    const saveBookingToFirestore = async (transactionId: string) => {
+        if (!currentUser) throw new Error("User not authenticated");
+        if (!creator) throw new Error("Creator data not available.");
+
+        let demoVideoUrl = '';
+        if (campaign.demoVideo) {
+            try {
+                const storageRef = ref(storage, `bookings/${currentUser.uid}/${Date.now()}_${campaign.demoVideo.name}`);
+                await uploadBytes(storageRef, campaign.demoVideo);
+                demoVideoUrl = await getDownloadURL(storageRef);
+            } catch (error) {
+                console.error("Error uploading demo video:", error);
+                toast({ title: "Upload Error", description: "Failed to upload demo video. Booking saved without it.", variant: "destructive" });
+            }
+        }
+
+        const bookingPayload = {
+            userId: currentUser.uid,
+            userEmail: currentUser.email || bookerDetails.email,
+            creatorId: creator.id,
+            creatorName: creator.fullName,
+            creatorUsername: creator.instagramUsername,
+            creatorProfileLink: creator.instagramProfileLink,
+            creatorDetails: {
+                totalFollowers: creator.totalFollowers,
+                avgReelViews: creator.avgReelViews,
+                storyAverageViews: creator.storyAverageViews,
+                cityState: creator.cityState,
+                gender: creator.gender,
+                contentCategory: creator.contentCategory,
+                contentLanguages: creator.contentLanguages,
+                reelPrice: creator.reelPrice,
+                storyPrice: creator.storyPrice,
+                reelsStoryPrice: creator.reelsStoryPrice,
+                deliveryDuration: creator.deliveryDuration,
+                creatorEmailAddress: creator.emailAddress,
+                creatorMobileNumber: creator.mobileNumber,
+            },
+            services: services,
+            campaign: {
+                name: campaign.name,
+                description: campaign.description,
+                deadline: campaign.deadline ? Timestamp.fromDate(campaign.deadline) : null,
+                demoVideoUrl,
+                demoVideoName: campaign.demoVideo?.name || null,
+            },
+            bookerDetails,
+            payment: {
+                status: 'success',
+                transactionId,
+                amount: grandTotalPrice,
+                currency: 'INR'
+            },
+            subTotalPrice,
+            serviceCharge: SERVICE_CHARGE,
+            grandTotalPrice,
+            createdAt: Timestamp.now(),
+            status: 'pending' as const
+        };
+
+        try {
+            const bookingRef = doc(db, "bookings", transactionId);
+            await setDoc(bookingRef, bookingPayload);
+            return true;
+        } catch (error) {
+            console.error("Error saving booking:", error);
+            throw new Error("Failed to save booking details to database.");
+        }
+    };
+
     const handleSubmitBooking = async () => {
         if (!currentUser) {
             toast({ title: "Authentication Required", description: "Please sign in to complete your booking", variant: "destructive" });
             return;
         }
+        if (!isSDKReady) {
+            toast({ title: "Payment Gateway Loading", description: "Please wait a moment for the payment gateway to be ready.", variant: "destructive" });
+            return;
+        }
         if (!creator) return;
 
-        setPaymentLoading(true);
         setBookingData(prev => ({ ...prev, payment: { status: 'processing', message: 'Initiating payment...' } }));
 
-        try {
-            // Generate a unique transaction ID for PayU. This will be your internal reference.
-            const payuTxnId = `BOOK_${currentUser.uid}_${Date.now()}`; // Add "BOOK_" prefix
-
-            // Prepare the full booking payload to send to the backend for initial save
-            let demoVideoUrl = '';
-            if (campaign.demoVideo) {
-                try {
-                    const storageRef = ref(storage, `bookings/${currentUser.uid}/${Date.now()}_${campaign.demoVideo.name}`);
-                    await uploadBytes(storageRef, campaign.demoVideo);
-                    demoVideoUrl = await getDownloadURL(imageRef);
-                } catch (uploadError) {
-                    console.error("Error uploading demo video:", uploadError);
-                    toast({ title: "Upload Error", description: "Failed to upload demo video. Booking will proceed without it.", variant: "destructive" });
-                }
+        let demoVideoUrl = '';
+        if (bookingData.campaign.demoVideo) {
+            try {
+                const storageRef = ref(storage, `bookings/${currentUser.uid}/${Date.now()}_${bookingData.campaign.demoVideo.name}`);
+                await uploadBytes(storageRef, bookingData.campaign.demoVideo);
+                demoVideoUrl = await getDownloadURL(storageRef);
+            } catch (error) {
+                toast({ title: "Upload Error", description: "Failed to upload demo video. Please try again.", variant: "destructive" });
+                setBookingData(prev => ({ ...prev, payment: { status: 'idle' } }));
+                return;
             }
+        }
 
-            const initialBookingPayload = {
-                userId: currentUser.uid,
-                userEmail: currentUser.email || bookerDetails.email,
-                creatorId: creator.id,
-                creatorName: creator.fullName,
-                creatorUsername: creator.instagramUsername,
-                creatorProfileLink: creator.instagramProfileLink,
-                creatorDetails: {
-                    totalFollowers: creator.totalFollowers,
-                    avgReelViews: creator.avgReelViews,
-                    storyAverageViews: creator.storyAverageViews,
-                    cityState: creator.cityState,
-                    gender: creator.gender,
-                    contentCategory: creator.contentCategory,
-                    contentLanguages: creator.contentLanguages,
-                    reelPrice: creator.reelPrice,
-                    storyPrice: creator.storyPrice,
-                    reelsStoryPrice: creator.reelsStoryPrice,
-                    deliveryDuration: creator.deliveryDuration,
-                    creatorEmailAddress: creator.emailAddress,
-                    creatorMobileNumber: creator.mobileNumber,
-                },
-                services: services,
-                campaign: {
-                    name: campaign.name,
-                    description: campaign.description,
-                    deadline: campaign.deadline ? Timestamp.fromDate(campaign.deadline) : null,
-                    demoVideoUrl,
-                    demoVideoName: campaign.demoVideo?.name || null,
-                },
-                bookerDetails,
-                payment: {
-                    status: 'idle', // Initial status, backend will change to 'pending'
-                    transactionId: payuTxnId,
-                    payuPaymentId: '',
-                    amount: grandTotalPrice,
-                    currency: 'INR'
-                },
-                subTotalPrice,
-                serviceCharge: SERVICE_CHARGE,
-                grandTotalPrice,
-                status: 'pending' as const
-            };
+        const bookingPayloadForAPI = {
+            creatorId: creator.id,
+            creatorName: creator.fullName,
+            creatorDetails: {
+                fullName: creator.fullName,
+                profilePictureUrl: creator.profilePictureUrl,
+                instagramUsername: creator.instagramUsername,
+                instagramProfileLink: creator.instagramProfileLink,
+                totalFollowers: creator.totalFollowers,
+                avgReelViews: creator.avgReelViews,
+                storyAverageViews: creator.storyAverageViews,
+                cityState: creator.cityState,
+                gender: creator.gender,
+                contentCategory: creator.contentCategory,
+                contentLanguages: creator.contentLanguages,
+                deliveryDuration: creator.deliveryDuration,
+                emailAddress: creator.emailAddress,
+                mobileNumber: creator.mobileNumber,
+            },
+            bookerDetails: bookingData.bookerDetails,
+            services: bookingData.services,
+            campaign: {
+                ...bookingData.campaign,
+                demoVideoUrl,
+                deadline: bookingData.campaign.deadline ? bookingData.campaign.deadline.toISOString() : null,
+            },
+            subTotalPrice,
+            serviceCharge: SERVICE_CHARGE,
+            grandTotalPrice,
+        };
 
-            // Step 1: Call your backend to get PayU payment parameters and hash
-            const response = await fetch('/api/payu/initiate-payment', {
+        try {
+            const token = await currentUser.getIdToken();
+            const response = await fetch('/api/cashfree/create-booking-order', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({
-                    amount: grandTotalPrice,
-                    txnid: payuTxnId,
-                    productinfo: `Booking for ${creator.fullName} on Snaapii (ID: ${creator.id})`,
-                    firstname: bookerDetails.fullName,
-                    email: bookerDetails.email,
-                    phone: bookerDetails.phoneNumber,
-                    surl: `${window.location.origin}/api/payu/verify-payment`,
-                    furl: `${window.location.origin}/api/payu/verify-payment`,
-                    udf1: 'BOOKING', // Indicate transaction type
-                    udf2: currentUser.uid, // Pass userId as udf2
-                    udf3: creator.id, // Pass creatorId as udf3
-                    udf4: subTotalPrice,
-                    udf5: SERVICE_CHARGE,
-                    bookingPayload: initialBookingPayload,
-                }),
+                body: JSON.stringify({ bookingPayload: bookingPayloadForAPI }),
             });
 
             const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to get PayU parameters from backend.');
+            if (data.success && data.payment_session_id) {
+                const cashfree = (window as any).Cashfree({ mode: "sandbox" }); // Use "production" for live
+                cashfree.checkout({
+                    paymentSessionId: data.payment_session_id,
+                    redirectTarget: "_self", // Or "_blank" if you want a new tab
+                });
+
+                // Set payment status to processing (will be updated by Cashfree webhook/redirect)
+                setBookingData(prev => ({
+                    ...prev,
+                    payment: {
+                        status: 'processing',
+                        message: 'Redirecting to payment gateway...',
+                    }
+                }));
+
+            } else {
+                toast({ title: "Payment Error", description: data.message || "Could not initiate payment.", variant: "destructive" });
+                setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: data.message } }));
+                // In case of API failure, revert to previous step or keep on step 4
+                // For simplicity here, let's keep it on step 4 with failed status.
+                // You might want to move to step 5 to display a detailed failure message.
             }
-
-            const { payuParams, payuBaseUrl } = data;
-
-            // Dynamically create and submit a form to PayU
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = payuBaseUrl;
-            form.name = 'payuForm';
-
-            for (const key in payuParams) {
-                if (Object.prototype.hasOwnProperty.call(payuParams, key)) {
-                    const hiddenField = document.createElement('input');
-                    hiddenField.type = 'hidden';
-                    hiddenField.name = key;
-                    hiddenField.value = payuParams[key];
-                    form.appendChild(hiddenField);
-                }
-            }
-
-            document.body.appendChild(form);
-            form.submit();
-
-        } catch (error: any) {
-            console.error("PayU checkout error:", error);
-            setBookingData(prev => ({
-                ...prev,
-                payment: {
-                    status: 'failed',
-                    message: error.message || 'Failed to initiate payment. Please try again.',
-                    transactionId: bookingData.payment.transactionId,
-                },
-                step: 5
-            }));
-            toast({ title: "Payment Error", description: error.message || "Failed to initiate payment. Please try again.", variant: "destructive" });
-        } finally {
-            setPaymentLoading(false);
+        } catch (error) {
+            console.error("Booking processing error:", error);
+            toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+            setBookingData(prev => ({ ...prev, payment: { status: 'failed', message: 'An unexpected error occurred.' } }));
+            // Move to step 5 to display detailed failure message
+            setBookingData(prev => ({ ...prev, step: 5 }));
         }
     };
 
+    // --- UI Components for steps ---
     const ServiceCard = ({ type, label, description, price }: { type: 'reels' | 'story' | 'reelsStory'; label: string; description: string; price: string; }) => (
         <div className={cn(
             "bg-gradient-to-br from-white to-gray-50 p-6 rounded-xl border-2 shadow-sm flex flex-col md:flex-row items-center justify-between transition-all",
@@ -519,18 +487,20 @@ const BookingPage: React.FC = () => {
         </div>
     );
 
+
     const renderStepContent = () => {
-        if (!creator) return null;
+        if (!creator) return null; // Ensure creator data is available
         switch (step) {
             case 1:
                 return (
                     <div className="space-y-6">
-                        <h3 className="text-xl font-bold text-gray-800 text-center">
+                        <h3 className="text-2xl font-bold text-gray-800 text-center">
                             Select Services
                             <span className="block text-sm font-normal text-gray-500 mt-1">
                                 Choose the services you want to book
                             </span>
                         </h3>
+
                         <div className="space-y-4">
                             <ServiceCard
                                 type="reels"
@@ -538,12 +508,14 @@ const BookingPage: React.FC = () => {
                                 description="Short-form video content for engaging your audience"
                                 price={creator.reelPrice}
                             />
+
                             <ServiceCard
                                 type="story"
                                 label="Story Post"
                                 description="24-hour disappearing content for quick updates"
                                 price={creator.storyPrice}
                             />
+
                             <ServiceCard
                                 type="reelsStory"
                                 label="Reels + Story Combo"
@@ -551,6 +523,7 @@ const BookingPage: React.FC = () => {
                                 price={creator.reelsStoryPrice}
                             />
                         </div>
+
                         <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-200 mt-4">
                             <div className="flex justify-between items-center">
                                 <div>
@@ -579,8 +552,9 @@ const BookingPage: React.FC = () => {
                                 Tell us about your campaign
                             </span>
                         </h3>
+
                         <div>
-                            <Label htmlFor="campaignName" className="block text-sm font-medium text-gray-800 flex items-center">
+                            <Label htmlFor="campaignName" className="mb-2 block text-gray-700 flex items-center">
                                 Campaign Name <span className="text-purple-500 ml-1">*</span>
                             </Label>
                             <Input
@@ -589,16 +563,12 @@ const BookingPage: React.FC = () => {
                                 value={campaign.name}
                                 onChange={handleCampaignChange}
                                 placeholder="e.g., Summer Collection Launch"
-                                className={cn(
-                                    "border-gray-300 focus:border-purple-400 focus:ring-purple-400",
-                                    validationErrors.campaignName && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                )}
+                                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
-                            {validationErrors.campaignName && <p className="text-red-500 text-sm mt-1">{errors.campaignName}</p>}
                         </div>
 
                         <div>
-                            <Label htmlFor="campaignDescription" className="block text-sm font-medium text-gray-800 flex items-center">
+                            <Label htmlFor="campaignDescription" className="mb-2 block text-gray-700 flex items-center">
                                 Campaign Description <span className="text-purple-500 ml-1">*</span>
                                 <Info className="ml-2 h-4 w-4 text-gray-500" />
                             </Label>
@@ -609,34 +579,27 @@ const BookingPage: React.FC = () => {
                                 onChange={handleCampaignChange}
                                 placeholder="Describe your campaign objectives and requirements..."
                                 rows={5}
-                                className={cn(
-                                    "border-gray-300 focus:border-purple-400 focus:ring-purple-400",
-                                    validationErrors.campaignDescription && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                )}
+                                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
-                            {validationErrors.campaignDescription && <p className="text-red-500 text-sm mt-1">{errors.campaignDescription}</p>}
                         </div>
 
                         <div>
-                            <Label htmlFor="campaignDeadline" className="block text-sm font-medium text-gray-800 flex items-center">
+                            <Label htmlFor="campaignDeadline" className="mb-2 block text-gray-700 flex items-center">
                                 Deadline <span className="text-purple-500 ml-1">*</span>
                             </Label>
+
                             <Button
                                 variant="outline"
-                                onClick={() => {
-                                    setShowCalendar(!showCalendar);
-                                    setValidationErrors(prev => ({ ...prev, campaignDeadline: false }));
-                                }}
+                                onClick={() => setShowCalendar(!showCalendar)}
                                 className={cn(
                                     "w-full justify-start text-left font-normal border-gray-300 hover:bg-gray-100",
-                                    !campaign.deadline && "text-gray-400",
-                                    validationErrors.campaignDeadline && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                    !campaign.deadline && "text-gray-400"
                                 )}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4 text-gray-600" />
                                 {campaign.deadline ? format(campaign.deadline, "PPP") : "Select a date"}
                             </Button>
-                            {validationErrors.campaignDeadline && <p className="text-red-500 text-sm mt-1">{errors.campaignDeadline}</p>}
+
                             {showCalendar && (
                                 <div className="mt-4 flex justify-center">
                                     <Calendar
@@ -652,7 +615,7 @@ const BookingPage: React.FC = () => {
                         </div>
 
                         <div>
-                            <Label htmlFor="demoVideo" className="block text-sm font-medium text-gray-800">
+                            <Label htmlFor="demoVideo" className="mb-2 block text-gray-700">
                                 Upload Demo Video (Optional)
                             </Label>
                             <Input
@@ -683,7 +646,7 @@ const BookingPage: React.FC = () => {
                         </h3>
 
                         <div>
-                            <Label htmlFor="bookerFullName" className="block text-sm font-medium text-gray-800 flex items-center">
+                            <Label htmlFor="bookerFullName" className="mb-2 block text-gray-700 flex items-center">
                                 Full Name <span className="text-purple-500 ml-1">*</span>
                             </Label>
                             <Input
@@ -692,17 +655,13 @@ const BookingPage: React.FC = () => {
                                 value={bookerDetails.fullName}
                                 onChange={handleBookerDetailsChange}
                                 placeholder="Your full name"
-                                className={cn(
-                                    "border-gray-300 focus:border-purple-400 focus:ring-purple-400",
-                                    validationErrors.bookerFullName && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                )}
+                                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                             />
-                            {validationErrors.bookerFullName && <p className="text-red-500 text-sm mt-1">{errors.bookerFullName}</p>}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <Label htmlFor="bookerEmail" className="block text-sm font-medium text-gray-800 flex items-center">
+                                <Label htmlFor="bookerEmail" className="mb-2 block text-gray-700 flex items-center">
                                     Email Address <span className="text-purple-500 ml-1">*</span>
                                 </Label>
                                 <Input
@@ -712,16 +671,12 @@ const BookingPage: React.FC = () => {
                                     value={bookerDetails.email}
                                     onChange={handleBookerDetailsChange}
                                     placeholder="your.email@example.com"
-                                    className={cn(
-                                        "border-gray-300 focus:border-purple-400 focus:ring-purple-400",
-                                        validationErrors.bookerEmail && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                    )}
+                                    className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                                 />
-                                {validationErrors.bookerEmail && <p className="text-red-500 text-sm mt-1">{errors.bookerEmail}</p>}
                             </div>
 
                             <div>
-                                <Label htmlFor="bookerPhoneNumber" className="block text-sm font-medium text-gray-800 flex items-center">
+                                <Label htmlFor="bookerPhoneNumber" className="mb-2 block text-gray-700 flex items-center">
                                     Phone Number <span className="text-purple-500 ml-1">*</span>
                                 </Label>
                                 <Input
@@ -731,12 +686,8 @@ const BookingPage: React.FC = () => {
                                     value={bookerDetails.phoneNumber}
                                     onChange={handleBookerDetailsChange}
                                     placeholder="+91 9876543210"
-                                    className={cn(
-                                        "border-gray-300 focus:border-purple-400 focus:ring-purple-400",
-                                        validationErrors.bookerPhoneNumber && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                    )}
+                                    className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
                                 />
-                                {validationErrors.bookerPhoneNumber && <p className="text-red-500 text-sm mt-1">{errors.bookerPhoneNumber}</p>}
                             </div>
                         </div>
 
@@ -767,19 +718,21 @@ const BookingPage: React.FC = () => {
                             <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                                 Creator Info
                             </h4>
-                            <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-                                <Image
-                                    src={creator.profilePictureUrl || 'https://placehold.co/64x64/EEE2FE/6B21A8?text=Photo'}
-                                    alt={creator.fullName}
-                                    width={64}
-                                    height={64}
-                                    className="w-16 h-16 rounded-full object-cover border-2 border-purple-300 shadow-md flex-shrink-0"
-                                    onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.onerror = null;
-                                        target.src = `https://placehold.co/64x64/EEE2FE/6B21A8?text=${creator.fullName.charAt(0)}`;
-                                    }}
-                                />
+                            <div className="flex items-center space-x-4 mb-4">
+                                {creator.profilePictureUrl && (
+                                    <Image
+                                        src={creator.profilePictureUrl}
+                                        alt={creator.fullName}
+                                        width={64}
+                                        height={64}
+                                        className="w-16 h-16 rounded-full object-cover border-2 border-purple-300 shadow-md flex-shrink-0"
+                                        onError={(e) => {
+                                            const target = e.target as HTMLImageElement;
+                                            target.onerror = null;
+                                            target.src = `https://placehold.co/64x64/EEE2FE/6B21A8?text=${creator.fullName.charAt(0)}`;
+                                        }}
+                                    />
+                                )}
                                 <div>
                                     <p className="text-xl font-bold text-gray-900">{creator.fullName}</p>
                                     <p className="text-sm text-gray-600">@{creator.instagramUsername}</p>
@@ -902,7 +855,7 @@ const BookingPage: React.FC = () => {
                     </div>
                 );
 
-            case 5:
+            case 5: // New Confirmation Step for Cashfree
                 return (
                     <div className="space-y-8">
                         <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -934,16 +887,13 @@ const BookingPage: React.FC = () => {
                                     <p className="text-green-700 text-lg">
                                         Your booking with {creator.fullName} is confirmed
                                     </p>
+
                                     <div className="mt-6 bg-white p-4 rounded-lg border border-green-200 w-full max-w-md">
                                         <h5 className="font-bold text-gray-800 mb-3">Booking Summary</h5>
                                         <div className="space-y-2 text-left">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Transaction ID:</span>
                                                 <span className="font-medium">{payment.transactionId || 'N/A'}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">PayU Payment ID:</span>
-                                                <span className="font-medium">{payment.payuPaymentId || 'N/A'}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-600">Amount Paid:</span>
@@ -963,12 +913,15 @@ const BookingPage: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
+
                                     <p className="text-sm text-gray-600 mt-6">
                                         We&apos;ve sent booking details to {bookerDetails.email}
                                     </p>
                                     <p className="text-sm text-gray-600 mt-2">
                                         You can view your bookings in the &quot;My Orders&quot; section
                                     </p>
+
+                                    {/* Business Contact Details */}
                                     <div className="mt-8 bg-purple-50 p-4 rounded-lg border border-purple-200">
                                         <h5 className="font-bold text-purple-800 mb-3">Need assistance? Contact us!</h5>
                                         <div className="flex flex-col items-start text-left space-y-2 text-sm text-purple-700">
@@ -1003,6 +956,11 @@ const BookingPage: React.FC = () => {
                                     <p className="text-sm text-gray-600 mt-4">
                                         Please try again or contact support
                                     </p>
+                                    {payment.transactionId && (
+                                        <p className="text-sm text-gray-600 mt-2">
+                                            Transaction ID: {payment.transactionId}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1049,7 +1007,10 @@ const BookingPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 p-6 flex items-center justify-center">
-            <div className="w-full sm:max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200 mb-24">
+            {/* Cashfree SDK Script */}
+            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} strategy="afterInteractive" />
+
+            <div className="w-full sm:max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
                         Book {creator.fullName}
@@ -1084,6 +1045,7 @@ const BookingPage: React.FC = () => {
 
                 {/* Navigation Buttons */}
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:space-x-2 pt-6 border-t border-gray-100">
+                    {/* Back button: visible on steps > 1 and < 5, only if payment is idle */}
                     {step > 1 && step < steps.length && payment.status === 'idle' && (
                         <Button
                             variant="outline"
@@ -1094,25 +1056,27 @@ const BookingPage: React.FC = () => {
                         </Button>
                     )}
 
+                    {/* Next button: visible on steps < 4, only if payment is idle */}
                     {step < steps.length - 1 && payment.status === 'idle' && (
                         <Button
                             onClick={handleNextStep}
-                            className="w-full sm:w-auto px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+                            className="w-full sm:w-auto px-6 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
                         >
                             Next
                         </Button>
                     )}
 
-                    {step === 4 && grandTotalPrice > 0 && (
+                    {/* Confirm & Pay button: visible only on step 4, only if payment is idle */}
+                    {step === 4 && payment.status === 'idle' && (
                         <Button
                             onClick={handleSubmitBooking}
-                            disabled={paymentLoading || payment.status === 'processing'}
+                            disabled={!isSDKReady || payment.status === 'processing'}
                             className="w-full sm:w-auto px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
                         >
-                            {paymentLoading || payment.status === 'processing' ? (
+                            {payment.status === 'processing' ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Loading Payment...
+                                    {payment.message || 'Processing...'}
                                 </>
                             ) : (
                                 <>
@@ -1121,108 +1085,26 @@ const BookingPage: React.FC = () => {
                             )}
                         </Button>
                     )}
-                    {step === 4 && grandTotalPrice === 0 && (
-                        <Button
-                            onClick={async () => {
-                                const freeTxnId = `FREE_${currentUser?.uid}_${Date.now()}`;
-                                setBookingData(prev => ({
-                                    ...prev,
-                                    payment: { status: 'processing', message: 'Processing free booking...', transactionId: freeTxnId },
-                                    step: 5
-                                }));
 
-                                try {
-                                    let demoVideoUrl = '';
-                                    if (campaign.demoVideo) {
-                                        const storageRef = ref(storage, `bookings/${currentUser?.uid}/${Date.now()}_${campaign.demoVideo.name}`);
-                                        await uploadBytes(storageRef, campaign.demoVideo);
-                                        demoVideoUrl = await getDownloadURL(storageRef);
-                                    }
-
-                                    const freeBookingPayload = {
-                                        userId: currentUser?.uid,
-                                        userEmail: currentUser?.email || bookerDetails.email,
-                                        creatorId: creator?.id,
-                                        creatorName: creator?.fullName,
-                                        creatorUsername: creator?.instagramUsername,
-                                        creatorProfileLink: creator?.instagramProfileLink,
-                                        creatorDetails: creator,
-                                        services: services,
-                                        campaign: {
-                                            name: campaign.name,
-                                            description: campaign.description,
-                                            deadline: campaign.deadline ? Timestamp.fromDate(campaign.deadline) : null,
-                                            demoVideoUrl,
-                                            demoVideoName: campaign.demoVideo?.name || null,
-                                        },
-                                        bookerDetails,
-                                        payment: {
-                                            status: 'success',
-                                            transactionId: freeTxnId,
-                                            payuPaymentId: 'N/A_FREE_BOOKING',
-                                            amount: 0,
-                                            currency: 'INR'
-                                        },
-                                        subTotalPrice: 0,
-                                        serviceCharge: 0,
-                                        grandTotalPrice: 0,
-                                        createdAt: new Date(),
-                                        status: 'confirmed' as const
-                                    };
-
-                                    const bookingRef = doc(db, "bookings", freeTxnId);
-                                    await setDoc(bookingRef, freeBookingPayload);
-
-                                    setBookingData(prev => ({
-                                        ...prev,
-                                        payment: { ...prev.payment, status: 'success', message: 'Free booking confirmed!' }
-                                    }));
-                                    toast({ title: "Booking Successful!", description: "Your free booking is confirmed.", variant: "success", className: "bg-green-100 text-green-800" });
-
-                                } catch (err) {
-                                    console.error("Error processing free booking:", err);
-                                    setBookingData(prev => ({
-                                        ...prev,
-                                        payment: { ...prev.payment, status: 'failed', message: 'Failed to process free booking. Contact support.' }
-                                    }));
-                                    toast({ title: "Booking Error", description: "Failed to process free booking. Please contact support.", variant: "destructive" });
-                                }
-                            }}
-                            disabled={paymentLoading || payment.status === 'processing'}
-                            className="w-full sm:w-auto px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-                        >
-                            {paymentLoading || payment.status === 'processing' ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Processing Booking...
-                                </>
-                            ) : (
-                                <>
-                                    Confirm Free Booking
-                                </>
-                            )}
-                        </Button>
-                    )}
-
-
+                    {/* Buttons specific to Step 5 (Confirmation) */}
                     {step === 5 && payment.status === 'success' && (
                         <Button
-                            onClick={() => router.push(`/my-orders`)}
+                            onClick={() => router.push(`/creator/${creator?.id}`)}
                             className="w-full sm:w-auto px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                         >
-                            View My Orders
+                            Done
                         </Button>
                     )}
                     {step === 5 && payment.status === 'failed' && (
                         <Button
-                            onClick={() => setBookingData(prev => ({ ...prev, payment: { status: 'idle' }, step: 4 }))}
+                            onClick={() => setBookingData(prev => ({ ...prev, payment: { status: 'idle' }, step: 4 }))} // Go back to Step 4 to try again
                             className="w-full sm:w-auto px-6 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
                         >
                             Try Again
                         </Button>
                     )}
                     {step === 5 && payment.status === 'processing' && (
-                        <div className="flex items-center justify-center w-full sm:w-auto px-6 py-2">
+                        <div className="flex items-center justify-center w-full sm:w-auto px-6 py-2 text-gray-700">
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Processing Payment...
                         </div>

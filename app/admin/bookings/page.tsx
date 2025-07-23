@@ -62,7 +62,6 @@ interface Booking {
     status: string;
     transactionId: string;
   };
-  // Updated: Added 'pending' back to the status types
   status: 'pending' | 'accepted' | 'completed' | 'rejected';
   creatorContact?: CreatorContact;
 }
@@ -87,13 +86,20 @@ const formatCurrency = (amount: number): string => {
   }).format(amount || 0);
 };
 
-// Updated: Added 'pending' back to STATUS_OPTIONS
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'pending', label: 'Pending' },
   { value: 'accepted', label: 'Accepted' },
   { value: 'completed', label: 'Completed' },
   { value: 'rejected', label: 'Rejected' }
+];
+
+// --- New Sort Options ---
+const SORT_OPTIONS = [
+  { value: 'latest', label: 'Latest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'creator_asc', label: 'Creator (A-Z)' },
+  { value: 'creator_desc', label: 'Creator (Z-A)' },
 ];
 
 // --- Main Component ---
@@ -104,6 +110,7 @@ const BookingsPage = () => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [updatingBookingId, setUpdatingBookingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<string>('latest'); // New state for sort order
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalBookings, setTotalBookings] = useState(0);
@@ -113,12 +120,12 @@ const BookingsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const pageSize = 10;
 
-  const fetchBookings = useCallback(async (page = 1, lastDoc: QueryDocumentSnapshot<DocumentData> | null = null) => {
+  const fetchBookings = useCallback(async (page = 1, lastDoc: QueryDocumentSnapshot<DocumentData> | null = null, currentSortOrder: string) => {
     setLoading(true);
     setError(null);
     try {
-      // Get total count
-      if (page === 1) {
+      // Get total count (consider if this needs to be conditional based on filters/sorts)
+      if (page === 1 && (sortOrder === 'latest' || sortOrder === 'oldest')) { // Only fetch total count initially or for date sorts
         const countQuery = query(collection(db, "bookings"));
         const snapshot = await getCountFromServer(countQuery);
         const totalCount = snapshot.data().count;
@@ -126,10 +133,25 @@ const BookingsPage = () => {
         setTotalPages(Math.ceil(totalCount / pageSize));
       }
 
+      // Determine Firestore orderBy based on currentSortOrder
+      let queryOrderBy: any[] = [];
+      if (currentSortOrder === 'latest') {
+        queryOrderBy = [orderBy("createdAt", "desc")];
+      } else if (currentSortOrder === 'oldest') {
+        queryOrderBy = [orderBy("createdAt", "asc")];
+      } else {
+        // For A-Z and Z-A, we'll fetch all and then sort in memory.
+        // Firestore doesn't allow ordering by different fields in the same query
+        // unless you have an index, and for pagination with a changing order, it's complex.
+        // For 'creator_asc' and 'creator_desc', we'll rely on in-memory sorting.
+        // We'll still order by createdAt for stable pagination.
+        queryOrderBy = [orderBy("createdAt", "desc")]; // Default to latest for base fetch
+      }
+
       // Construct query
       const bookingsQuery = query(
         collection(db, "bookings"),
-        orderBy("createdAt", "desc"),
+        ...queryOrderBy,
         ...(lastDoc && page > 1 ? [startAfter(lastDoc)] : []),
         limit(pageSize)
       );
@@ -145,7 +167,6 @@ const BookingsPage = () => {
         bookingsData.map(async (booking) => {
           if (booking.creatorId) {
             try {
-              // 1. Get creator application
               const creatorAppRef = doc(db, "creatorApplications", booking.creatorId);
               const creatorAppSnap = await getDoc(creatorAppRef);
 
@@ -164,7 +185,6 @@ const BookingsPage = () => {
                   };
                 }
 
-                // 2. Get user document
                 const userDocRef = doc(db, "users", userId);
                 const userDocSnap = await getDoc(userDocRef);
 
@@ -183,7 +203,6 @@ const BookingsPage = () => {
                     };
                   }
 
-                  // 3. Get creator application document for Instagram
                   const creatorAppRef2 = doc(db, "creatorApplications", creatorAppId);
                   const creatorAppSnap2 = await getDoc(creatorAppRef2);
 
@@ -224,11 +243,11 @@ const BookingsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [pageSize]);
+  }, [pageSize, sortOrder]); // Add sortOrder to dependencies
 
   useEffect(() => {
-    fetchBookings(1, null);
-  }, [fetchBookings]);
+    fetchBookings(1, null, sortOrder);
+  }, [fetchBookings, sortOrder]); // Add sortOrder here as well
 
   const updateBookingStatus = async (bookingId: string, newStatus: Booking['status']) => {
     setUpdatingBookingId(bookingId);
@@ -249,42 +268,70 @@ const BookingsPage = () => {
     }
   };
 
-  const filteredBookings = useMemo(() => {
-    if (!searchTerm && statusFilter === 'all') return bookings;
-    const lowercasedTerm = searchTerm.toLowerCase();
-    return bookings.filter(booking => {
-      const matchesSearch = (
+  const filteredAndSortedBookings = useMemo(() => {
+    let currentBookings = [...bookings]; // Create a mutable copy
+
+    // Apply search filter
+    if (searchTerm) {
+      const lowercasedTerm = searchTerm.toLowerCase();
+      currentBookings = currentBookings.filter(booking =>
         booking.bookerDetails.fullName.toLowerCase().includes(lowercasedTerm) ||
         booking.bookerDetails.email.toLowerCase().includes(lowercasedTerm) ||
         booking.creatorName.toLowerCase().includes(lowercasedTerm) ||
         (booking.payment.transactionId && booking.payment.transactionId.toLowerCase().includes(lowercasedTerm))
       );
-      const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [bookings, searchTerm, statusFilter]);
+    }
 
-  // Updated: Added color for 'pending' status
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      currentBookings = currentBookings.filter(booking => booking.status === statusFilter);
+    }
+
+    // Apply in-memory sort for creator name
+    if (sortOrder === 'creator_asc') {
+      currentBookings.sort((a, b) => a.creatorName.localeCompare(b.creatorName));
+    } else if (sortOrder === 'creator_desc') {
+      currentBookings.sort((a, b) => b.creatorName.localeCompare(a.creatorName));
+    }
+    // For 'latest' and 'oldest', Firestore's orderBy takes precedence for the initial fetch,
+    // and for subsequent pages, the `createdAt` sort is maintained implicitly by the `startAfter` cursor.
+    // If you want to strictly re-sort all currently loaded data based on latest/oldest after client-side
+    // filtering, you can add that here. However, for efficient pagination, Firestore ordering is key.
+    // We'll rely on the `fetchBookings` to get the correct order from Firestore for date sorts.
+
+    return currentBookings;
+  }, [bookings, searchTerm, statusFilter, sortOrder]); // Add sortOrder to dependencies
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'accepted': return 'bg-blue-100 text-blue-800';
       case 'completed': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800'; // Fallback for unexpected statuses
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage > 0 && newPage <= totalPages && newPage !== currentPage) {
       setCurrentPage(newPage);
-      fetchBookings(newPage, newPage > currentPage ? lastVisible : null);
+      // When changing pages, re-fetch with the current sort order
+      fetchBookings(newPage, newPage > currentPage ? lastVisible : null, sortOrder);
     }
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortOrder(e.target.value);
+    setCurrentPage(1); // Reset to first page on sort change
+    setLastVisible(null); // Reset lastVisible when sort order changes
+    // Refetch bookings based on the new sort order
+    fetchBookings(1, null, e.target.value);
   };
 
   const handleClearSearch = () => {
     setSearchTerm('');
     setStatusFilter('all');
+    setSortOrder('latest'); // Reset sort order as well
     setShowFilters(false);
   };
 
@@ -302,7 +349,7 @@ const BookingsPage = () => {
               <p className="text-sm text-red-700">
                 {error}
                 <button
-                  onClick={() => fetchBookings(currentPage, lastVisible)}
+                  onClick={() => fetchBookings(currentPage, lastVisible, sortOrder)}
                   className="ml-2 font-medium underline text-red-700 hover:text-red-600"
                 >
                   Retry
@@ -332,7 +379,7 @@ const BookingsPage = () => {
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Bookings Management</h1>
               <p className="mt-1 text-sm text-gray-600">
-                Showing {filteredBookings.length} of {totalBookings} bookings
+                Showing {filteredAndSortedBookings.length} of {totalBookings} bookings
                 {statusFilter !== 'all' && ` (filtered by ${statusFilter})`}
               </p>
             </div>
@@ -371,9 +418,22 @@ const BookingsPage = () => {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm mb-3"
               >
                 {STATUS_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* Mobile Sort Dropdown */}
+              <select
+                value={sortOrder}
+                onChange={handleSortChange}
+                className="block w-full py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                {SORT_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -416,6 +476,19 @@ const BookingsPage = () => {
                 </option>
               ))}
             </select>
+
+            {/* Desktop Sort Dropdown */}
+            <select
+              value={sortOrder}
+              onChange={handleSortChange}
+              className="block w-full max-w-[180px] py-2 px-3 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+            >
+              {SORT_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </header>
 
@@ -432,7 +505,7 @@ const BookingsPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredBookings.length > 0 ? filteredBookings.map((booking) => (
+              {filteredAndSortedBookings.length > 0 ? filteredAndSortedBookings.map((booking) => (
                 <tr
                   key={booking.id}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
@@ -488,7 +561,6 @@ const BookingsPage = () => {
                         className="rounded-md border-gray-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs py-1 bg-white text-gray-900"
                         onClick={e => e.stopPropagation()}
                       >
-                        {/* Added 'pending' back as an option */}
                         <option value="pending">Pending</option>
                         <option value="accepted">Accepted</option>
                         <option value="completed">Completed</option>
@@ -506,14 +578,14 @@ const BookingsPage = () => {
                       </svg>
                       <h3 className="mt-4 text-lg font-medium text-gray-900">No bookings found</h3>
                       <p className="mt-1 text-sm text-gray-500">
-                        {searchTerm || statusFilter !== 'all' ? (
+                        {(searchTerm || statusFilter !== 'all' || sortOrder !== 'latest') ? (
                           <>
-                            No bookings match your search or filter criteria.{" "}
+                            No bookings match your search, filter, or sort criteria.{" "}
                             <button
                               onClick={handleClearSearch}
                               className="font-medium text-indigo-600 hover:text-indigo-500"
                             >
-                              Clear filters
+                              Clear filters and sort
                             </button>
                           </>
                         ) : "There are no bookings in the system yet."}

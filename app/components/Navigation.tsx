@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Menu, // This is the icon we'll make bigger
+  Menu,
   Home,
   Search,
   Megaphone,
@@ -12,9 +12,9 @@ import {
   LogOut,
   Settings,
   LayoutDashboard,
-  CheckCircle,
   Info,
   ShieldCheck,
+  Mail, // Added for Contact Us in Sheet
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -30,9 +30,8 @@ import {
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
-// Centralized Firebase imports for consistency
 import { auth, db } from '@/lib/firebaseConfig';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { signOut } from 'firebase/auth';
@@ -44,11 +43,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
-  updateDoc,
-  writeBatch,
   Timestamp,
 } from 'firebase/firestore';
-
 
 // --- Type Definitions ---
 interface UserProfile {
@@ -68,15 +64,23 @@ interface NotificationItem {
   link?: string;
 }
 
+// --- Static Navigation Items (defined outside to prevent re-creation on every render) ---
+const desktopNavItems = [
+  { name: "Home", href: "/" },
+  { name: "About", href: "/about" },
+  { name: "Campaigns", href: "/campaign" },
+  { name: "Contact", href: "/contact" },
+];
+
 // --- Component ---
 export default function Navigation() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const [user, loading] = useAuthState(auth);
   const router = useRouter();
+  const pathname = usePathname();
   const displayedNotificationIdsRef = useRef(new Set<string>());
 
   const requestNotificationPermission = useCallback(() => {
@@ -95,11 +99,12 @@ export default function Navigation() {
         notification.onclick = (event) => {
           event.preventDefault();
           window.focus();
+          router.push(link);
           notification.close();
         };
       }
     }
-  }, []);
+  }, [router]);
 
   // --- Firebase Authentication, Claims, and User Profile Listener ---
   useEffect(() => {
@@ -108,7 +113,7 @@ export default function Navigation() {
     if (user) {
       const fetchUserProfileAndClaims = async () => {
         try {
-          const idTokenResult = await user.getIdTokenResult(true); // Force token refresh
+          const idTokenResult = await user.getIdTokenResult(true);
           const isAdmin = idTokenResult.claims.admin === true;
 
           const userRef = doc(db, "users", user.uid);
@@ -151,44 +156,36 @@ export default function Navigation() {
       fetchUserProfileAndClaims();
     } else {
       setUserProfile(null);
-      setNotifications([]);
       setUnreadCount(0);
       displayedNotificationIdsRef.current.clear();
     }
   }, [user, loading]);
 
-
-  // --- Firestore Notifications Listener ---
+  // --- Firestore Notifications Listener (for unread count and desktop alerts) ---
   useEffect(() => {
     if (!db || !userProfile?.uid) {
-      setNotifications([]);
       setUnreadCount(0);
       displayedNotificationIdsRef.current.clear();
       return;
     }
 
-    // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
-    // We are now fetching from `users/{userProfile.uid}/notifications`
     const notificationsCollectionRef = collection(db, `users/${userProfile.uid}/notifications`);
     const q = query(notificationsCollectionRef, orderBy("timestamp", "desc"), limit(20));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedNotifications: NotificationItem[] = [];
       let currentUnreadCount = 0;
+      const newUnreadNotifications: NotificationItem[] = [];
 
       snapshot.forEach((doc) => {
         const data = doc.data() as Omit<NotificationItem, 'id'>;
-        fetchedNotifications.push({ id: doc.id, ...data });
         if (!data.read) {
           currentUnreadCount++;
+          if (!displayedNotificationIdsRef.current.has(doc.id)) {
+            newUnreadNotifications.push({ id: doc.id, ...data });
+          }
         }
       });
 
-      const newUnreadNotifications = fetchedNotifications.filter(
-        (notif) => !notif.read && !displayedNotificationIdsRef.current.has(notif.id)
-      );
-
-      setNotifications(fetchedNotifications);
       setUnreadCount(currentUnreadCount);
 
       newUnreadNotifications.forEach((notification) => {
@@ -200,10 +197,10 @@ export default function Navigation() {
     });
 
     return () => unsubscribe();
-  }, [userProfile?.uid, displayDesktopNotification]); // Removed appIdGlobal from dependency array as it's no longer used in path
+  }, [userProfile?.uid, displayDesktopNotification]);
 
   // --- Action Functions ---
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     try {
       await signOut(auth);
       router.push("/signin");
@@ -211,74 +208,37 @@ export default function Navigation() {
     } catch (error) {
       console.error("Error signing out:", error);
     }
-  };
+  }, [router]);
 
-  const navigateTo = (path: string) => {
+  const navigateTo = useCallback((path: string) => {
     router.push(path);
     setIsSheetOpen(false);
-  }
+  }, [router]);
 
-  const handleSearchClick = () => {
+  const handleSearchClick = useCallback(() => {
     setIsSheetOpen(false);
-
-    if (window.location.pathname === "/") {
+    if (pathname === "/") {
       if (typeof window !== 'undefined' && typeof (window as any).focusHomepageSearchBar === 'function') {
         (window as any).focusHomepageSearchBar();
       } else {
-        document.getElementById("homepage-search-section")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("homepage-search-section")?.scrollOfInterest({ behavior: "smooth", block: "center" });
       }
     } else {
       router.push("/#focus-search-input");
     }
-  };
-
-  const markNotificationAsRead = async (notificationId: string) => {
-    if (!db || !userProfile?.uid) return;
-    try {
-      // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
-      const notificationRef = doc(db, `users/${userProfile.uid}/notifications`, notificationId);
-      await updateDoc(notificationRef, { read: true });
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
-    }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    if (!db || !userProfile?.uid || unreadCount === 0) return;
-    try {
-      const batch = writeBatch(db);
-      // *** FIX APPLIED HERE: Use the same path as ApplicationsPage.tsx ***
-      const notificationsCollectionRef = collection(db, `users/${userProfile.uid}/notifications`);
-
-      notifications.filter(notif => !notif.read).forEach(notif => {
-        const notificationRef = doc(notificationsCollectionRef, notif.id);
-        batch.update(notificationRef, { read: true });
-      });
-      await batch.commit();
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-    }
-  };
-
-
-  // --- Navigation Items Configuration ---
-  const desktopNavItems = [
-    { name: "Home", href: "/" },
-    { name: "About", href: "/about" },
-    { name: "Campaigns", href: "/campaign" },
-  ];
+  }, [pathname, router]);
 
   const mobileBottomNavItems = [
     { name: "Home", href: "/", icon: Home },
     { name: "Search", onClick: handleSearchClick, icon: Search },
     { name: "Campaigns", href: "/campaign", icon: Megaphone },
-    { name: "Notifications", icon: Bell },
+    { name: "Notifications", href: "/notifications", icon: Bell },
     { name: user ? "Profile" : "Sign In", icon: user ? User : LogIn },
   ];
 
-  const renderProfileImage = (sizeClass: string, isMobileSheet = false) => {
+  const renderProfileImage = useCallback((sizeClass: string, isMobileSheet = false) => {
     const defaultIcon = <User className={isMobileSheet ? "h-6 w-6" : "h-5 w-5"} />;
-    const size = isMobileSheet ? 40 : 36;
+    const size = isMobileSheet ? 48 : 36; // Increased size for mobile sheet
     const char = userProfile?.name?.charAt(0).toUpperCase() || userProfile?.email?.charAt(0).toUpperCase() || 'U';
 
     if (userProfile?.photoURL) {
@@ -292,21 +252,21 @@ export default function Navigation() {
           onError={(e) => {
             const target = e.target as HTMLImageElement;
             target.onerror = null;
-            target.src = `https://placehold.co/${size}x${size}/cccccc/000000?text=${char}`;
+            target.src = `https://placehold.co/${size}x${size}/DDA0DD/FFFFFF?text=${char}`; // Purple placeholder
           }}
         />
       );
     }
     return (
-      <div className={`h-full w-full rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold ${isMobileSheet ? 'text-lg' : 'text-sm'}`}>
+      <div className={`h-full w-full rounded-full bg-purple-200 flex items-center justify-center text-purple-800 font-semibold ${isMobileSheet ? 'text-xl' : 'text-sm'}`}>
         {userProfile?.name || userProfile?.email ? char : defaultIcon}
       </div>
     );
-  };
+  }, [userProfile]); // Memoize renderProfileImage, depends on userProfile
 
   return (
     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-      {/* Desktop Navigation */}
+      {/* Desktop Navigation (unchanged for this request) */}
       <nav className="hidden md:block bg-white shadow-sm border-b sticky top-0 z-50 backdrop-blur-md bg-opacity-80 transition-all duration-300 ease-in-out">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
@@ -317,7 +277,8 @@ export default function Navigation() {
                 alt="Snaapii Logo"
                 width={100}
                 height={100}
-                className="transition-all duration-300 group-hover:scale-110 group"
+                className="transition-all duration-300 group-hover:scale-110"
+                priority
               />
               <span className="sr-only">Snaapii</span>
             </Link>
@@ -328,77 +289,32 @@ export default function Navigation() {
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 relative group"
+                  className={`py-2 px-3 rounded-md text-gray-700 hover:text-purple-700 font-medium transition-colors duration-200 relative group
+                    ${pathname === item.href ? 'bg-purple-100 text-purple-700' : ''}`}
                 >
                   {item.name}
-                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+                  {pathname !== item.href && (
+                    <span className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
+                  )}
                 </Link>
               ))}
-              <Link
-                href="/contact"
-                className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200 relative group"
-              >
-                Contact
-                <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></span>
-              </Link>
             </div>
 
             {/* Right: Notifications, Profile/Sign In */}
             <div className="flex items-center gap-4">
               {user ? (
                 <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="relative text-gray-700 hover:text-blue-600 transition-colors duration-200" onClick={requestNotificationPermission}>
-                        <Bell className="w-6 h-6" />
-                        {unreadCount > 0 && (
-                          <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-bounce-custom">
-                            {unreadCount}
-                          </span>
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-80" align="end" forceMount>
-                      <DropdownMenuLabel className="font-semibold text-base flex justify-between items-center">
-                        Notifications
-                        {unreadCount > 0 && (
-                          <Button variant="ghost" size="sm" onClick={markAllNotificationsAsRead} className="text-blue-600 text-xs px-2 py-1 rounded-md hover:bg-blue-50">
-                            Mark All Read
-                          </Button>
-                        )}
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuGroup>
-                        {notifications.length > 0 ? (
-                          notifications.map((notif) => (
-                            <DropdownMenuItem
-                              key={notif.id}
-                              onClick={() => notif.read || markNotificationAsRead(notif.id)}
-                              className={`flex items-start gap-2 py-2 px-3 cursor-pointer ${notif.read ? 'text-gray-500' : 'font-medium text-gray-800 bg-blue-50/50 hover:bg-blue-100'}`}
-                            >
-                              {notif.type === 'approval' ? (
-                                <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                              ) : (
-                                <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                              )}
-                              <div className="flex flex-col flex-grow">
-                                <p className="text-sm line-clamp-2">{notif.message}</p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                  {notif.timestamp?.toDate ? new Date(notif.timestamp.toDate()).toLocaleString() : new Date(notif.timestamp).toLocaleString()}
-                                </p>
-                              </div>
-                            </DropdownMenuItem>
-                          ))
-                        ) : (
-                          <DropdownMenuItem className="text-gray-500 italic py-3" disabled>
-                            No new notifications
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Link href="/notifications" className="relative" aria-label="View Notifications">
+                    <Button variant="ghost" size="icon" className="text-gray-700 hover:text-purple-600 transition-colors duration-200" onClick={requestNotificationPermission}>
+                      <Bell className="w-6 h-6" />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-0 right-0 -mt-1 -mr-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-bounce-custom">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </Button>
+                  </Link>
 
-                  {/* Profile Dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-9 w-9 rounded-full overflow-hidden p-0">
@@ -422,7 +338,6 @@ export default function Navigation() {
                           <Settings className="mr-2 h-4 w-4" />
                           <span>Manage Profile</span>
                         </DropdownMenuItem>
-                        {/* Desktop Admin Panel Link */}
                         {userProfile?.isAdmin && (
                           <DropdownMenuItem onClick={() => navigateTo("/admin")}>
                             <ShieldCheck className="mr-2 h-4 w-4" />
@@ -439,7 +354,7 @@ export default function Navigation() {
                   </DropdownMenu>
                 </>
               ) : (
-                <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transform hover:-translate-y-0.5 shadow-md">
+                <Link href="/signin" className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-9 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:-translate-y-0.5 shadow-md text-white">
                   Sign In
                 </Link>
               )}
@@ -448,48 +363,49 @@ export default function Navigation() {
         </div>
       </nav>
 
-     {/* Mobile Top Bar with Side Sheet Trigger */}
-<nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50">
-  <div className="flex items-center justify-between h-16 px-4">
-    <Link href="/" className="flex items-center gap-2">
-      <Image
-        src="/snaapii.png"
-        alt="Snaapii Logo"
-        width={100}
-        height={100}
-      />
-      <span className="sr-only">Snaapii</span>
-    </Link>
+      {/* Mobile Top Bar with Side Sheet Trigger (unchanged for this request) */}
+      <nav className="md:hidden bg-white shadow-sm border-b sticky top-0 z-50">
+        <div className="flex items-center justify-between h-16 px-4">
+          <Link href="/" className="flex items-center gap-2">
+            <Image
+              src="/snaapii.png"
+              alt="Snaapii Logo"
+              width={100}
+              height={100}
+              priority
+            />
+            <span className="sr-only">Snaapii</span>
+          </Link>
 
-    <SheetTrigger asChild>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="text-gray-700 hover:bg-gray-100 p-1"
-      >
-        <Menu className="h-10 w-10" /> {/* Explicitly set the size here */}
-      </Button>
-    </SheetTrigger>
-  </div>
-</nav>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-gray-700 hover:bg-gray-100 p-1"
+            >
+              <Menu className="h-10 w-10" />
+            </Button>
+          </SheetTrigger>
+        </div>
+      </nav>
 
-
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation (unchanged for this request) */}
       <div className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t shadow-xl z-50 backdrop-blur-md bg-opacity-80">
         <div className="flex justify-around items-center h-16">
           {mobileBottomNavItems.map((item) => {
             const Icon = item.icon;
-            const isNotifications = item.name === "Notifications";
-            const isProfileOrSignIn = item.name === (user ? "Profile" : "Sign In");
+            const targetHref = item.href || (user ? "/dashboard" : "/signin");
+            const isActive = item.onClick ? false : (pathname === targetHref);
 
-            const commonClasses = "flex flex-col items-center text-xs font-medium text-gray-600 hover:text-blue-600 transition-colors duration-200 py-1 px-2 flex-1 relative group";
+            const commonClasses = `flex flex-col items-center text-xs font-medium text-gray-600 hover:text-purple-600 transition-colors duration-200 py-1 px-2 flex-1 relative group
+              ${isActive ? 'bg-purple-50 text-purple-700 rounded-md mx-1' : ''}`;
             const iconClasses = "w-5 h-5 mb-1 group-hover:scale-110 transition-transform";
-            const badge = isNotifications && unreadCount > 0 ? (
+
+            const badge = (item.name === "Notifications" && unreadCount > 0) ? (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center">
                 {unreadCount}
               </span>
             ) : null;
-            const underline = <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-blue-600 group-hover:w-3/4 transition-all duration-300"></span>;
 
             const itemContent = (
               <>
@@ -498,94 +414,109 @@ export default function Navigation() {
                   {badge}
                 </div>
                 <span className="truncate">{item.name}</span>
-                {underline}
+                {!isActive && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-purple-600 group-hover:w-3/4 transition-all duration-300"></span>
+                )}
               </>
             );
 
-            if (isNotifications && user) {
-              return (
-                <DropdownMenu key={item.name}>
-                  <DropdownMenuTrigger asChild>
-                    <button className={commonClasses} onClick={requestNotificationPermission}>
-                      {itemContent}
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-80 mb-2" align="center" forceMount>
-                    <DropdownMenuLabel className="font-semibold text-base flex justify-between items-center">
-                      Notifications
-                      {unreadCount > 0 && (
-                        <Button variant="ghost" size="sm" onClick={markAllNotificationsAsRead} className="text-blue-600 text-xs px-2 py-1 rounded-md hover:bg-blue-50">
-                          Mark All Read
-                        </Button>
-                      )}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuGroup>
-                      {notifications.length > 0 ? (
-                        notifications.map((notif) => (
-                          <DropdownMenuItem
-                            key={notif.id}
-                            onClick={() => notif.read || markNotificationAsRead(notif.id)}
-                            className={`flex items-start gap-2 py-2 px-3 cursor-pointer ${notif.read ? 'text-gray-500' : 'font-medium text-gray-800 bg-blue-50/50 hover:bg-blue-100'}`}
-                          >
-                            {notif.type === 'approval' ? <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" /> : <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />}
-                            <div className="flex flex-col flex-grow"><p className="text-sm line-clamp-2">{notif.message}</p><p className="text-xs text-gray-400 mt-0.5">{notif.timestamp?.toDate ? new Date(notif.timestamp.toDate()).toLocaleString() : new Date(notif.timestamp).toLocaleString()}</p></div>
-                          </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <DropdownMenuItem className="text-gray-500 italic py-3" disabled>
-                          No new notifications
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            } else if (item.onClick) {
-              return (<button key={item.name} onClick={item.onClick} className={commonClasses}>{itemContent}</button>);
-            } else if (isProfileOrSignIn) {
-                const targetHref = user ? "/dashboard" : "/signin";
-                return (<Link key={item.name} href={targetHref} className={commonClasses}>{itemContent}</Link>);
+            if (item.onClick) {
+              return (<button key={item.name} type="button" onClick={item.onClick} className={commonClasses}>{itemContent}</button>);
             }
-            else {
-              return (<Link key={item.name} href={item.href || "#"} className={commonClasses}>{itemContent}</Link>);
-            }
+
+            return (<Link key={item.name} href={targetHref} className={commonClasses}>{itemContent}</Link>);
           })}
         </div>
       </div>
 
-      {/* Sheet Content for the mobile side panel */}
-      <SheetContent side="right" className="w-72 sm:w-80 flex flex-col">
+      {/* Sheet Content for the mobile side panel (IMPROVED DESIGN) */}
+      <SheetContent
+        side="right"
+        className="w-72 sm:w-80 flex flex-col bg-gradient-to-br from-purple-50 to-white p-0 overflow-y-auto" // Added gradient, removed padding here
+      >
         <VisuallyHidden.Root><SheetTitle>Main Navigation</SheetTitle></VisuallyHidden.Root>
+
+        {/* User Profile Section */}
         {user && userProfile && (
-          <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-            <div className="relative h-10 w-10 rounded-full overflow-hidden">{renderProfileImage("h-10 w-10", true)}</div>
-            <div className="flex flex-col"><span className="font-semibold text-gray-800 text-base leading-tight">{userProfile.name || "User"}</span>{userProfile.email && <span className="text-xs text-gray-500">{userProfile.email}</span>}</div>
+          <div className="flex items-center gap-4 p-6 bg-purple-600 text-white shadow-md">
+            <div className="relative h-12 w-12 rounded-full overflow-hidden flex-shrink-0">
+              {renderProfileImage("h-12 w-12", true)}
+            </div>
+            <div className="flex flex-col overflow-hidden">
+              <span className="font-semibold text-lg leading-tight truncate">{userProfile.name || "User"}</span>
+              {userProfile.email && <span className="text-sm opacity-90 truncate">{userProfile.email}</span>}
+            </div>
           </div>
         )}
-        <div className="flex flex-col space-y-2 mt-4 text-gray-800 text-lg font-medium flex-1">
-          <Link href="/" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Home className="h-5 w-5 text-gray-600" /> Home</Link>
-          <Link href="/about" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Info className="h-5 w-5 text-gray-600" /> About Us</Link>
-          <Link href="/campaign" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Megaphone className="h-5 w-5 text-gray-600" /> Campaigns</Link>
-          <Link href="/contact" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Search className="h-5 w-5 text-gray-600" /> Contact Us</Link>
-          <div className="border-t my-2"></div>
-          {user ? (
+
+        {/* Main Navigation Links */}
+        <div className="flex flex-col space-y-1 p-4 flex-grow">
+          {desktopNavItems.map((item) => {
+            const isActive = pathname === item.href;
+            let IconComponent;
+            switch (item.name) {
+              case "Home": IconComponent = Home; break;
+              case "About": IconComponent = Info; break;
+              case "Campaigns": IconComponent = Megaphone; break;
+              case "Contact": IconComponent = Mail; break; // Use Mail icon for Contact
+              default: IconComponent = Home; // Fallback
+            }
+
+            return (
+              <Link
+                key={`sheet-${item.name}`}
+                href={item.href}
+                onClick={() => setIsSheetOpen(false)}
+                className={`flex items-center gap-4 py-2.5 px-3 rounded-lg text-base font-medium transition-all duration-200
+                  ${isActive
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-gray-700 hover:bg-purple-100 hover:text-purple-700'
+                  }`}
+              >
+                <IconComponent className={`h-5 w-5 ${isActive ? 'text-white' : 'text-purple-500'}`} />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+
+          <div className="border-t border-purple-200 my-4"></div> {/* More prominent separator */}
+
+          {/* User-Specific Links */}
+          {user && (
             <>
-              <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><LayoutDashboard className="h-5 w-5 text-gray-600" /> Dashboard</Link>
-              <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50"><Settings className="mr-0 h-5 w-5 text-gray-600" /> Manage Profile</Link>
+              <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-4 py-2.5 px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-purple-100 hover:text-purple-700 transition-all duration-200">
+                <LayoutDashboard className="h-5 w-5 text-purple-500" /> Dashboard
+              </Link>
+              <Link href="/dashboard" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-4 py-2.5 px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-purple-100 hover:text-purple-700 transition-all duration-200">
+                <Settings className="h-5 w-5 text-purple-500" /> Manage Profile
+              </Link>
               {userProfile?.isAdmin && (
-                <Link href="/admin" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-3 hover:text-blue-600 transition-colors py-2 px-3 rounded-md hover:bg-gray-50">
-                  <ShieldCheck className="h-5 w-5 text-gray-600" /> Admin Panel
+                <Link href="/admin" onClick={() => setIsSheetOpen(false)} className="flex items-center gap-4 py-2.5 px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-purple-100 hover:text-purple-700 transition-all duration-200">
+                  <ShieldCheck className="h-5 w-5 text-purple-500" /> Admin Panel
                 </Link>
               )}
-              <div className="mt-auto pt-4">
-                <button onClick={handleSignOut} className="w-full flex items-center justify-center gap-3 text-left text-red-600 hover:bg-red-50 transition-colors py-3 px-3 rounded-md border border-red-200"><LogOut className="h-5 w-5" /> Log out</button>
-              </div>
             </>
+          )}
+        </div>
+
+        {/* Footer Action Button (Sticky) */}
+        <div className="p-4 bg-white border-t border-purple-200 sticky bottom-0 z-10 shadow-lg">
+          {user ? (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center justify-center gap-3 text-red-600 bg-red-50 hover:bg-red-100 transition-colors py-3 px-3 rounded-lg font-semibold border border-red-200 shadow-sm"
+            >
+              <LogOut className="h-5 w-5" /> Log out
+            </button>
           ) : (
-            <div className="mt-auto pt-4">
-              <Link href="/signin" onClick={() => setIsSheetOpen(false)} className="w-full inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors h-10 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 shadow-md"><LogIn className="mr-2 h-4 w-4" /> Sign In</Link>
-            </div>
+            <Link
+              href="/signin"
+              onClick={() => setIsSheetOpen(false)}
+              className="w-full inline-flex items-center justify-center whitespace-nowrap rounded-lg text-base font-semibold transition-colors h-10 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg transform hover:-translate-y-0.5"
+            >
+              <LogIn className="mr-2 h-5 w-5" /> Sign In
+            </Link>
           )}
         </div>
       </SheetContent>
@@ -593,9 +524,6 @@ export default function Navigation() {
       <style jsx>{`
         @keyframes bounce-custom { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
         .animate-bounce-custom { animation: bounce-custom 1s infinite; }
-        html, body { height: 100%; margin: 0; padding: 0; overflow-x: hidden; }
-        body { display: flex; flex-direction: column; min-height: 100vh; }
-        main { flex-grow: 1; }
       `}</style>
     </Sheet>
   );

@@ -25,7 +25,7 @@ export default function ReturnRefundPolicy() {
           </p>
 
           <p className="text-base sm:text-lg leading-relaxed">
-            Due to the nature of the services provided on the SNAAPII platform, which involve immediate access to our network, tools, and resources for collaborations and campaigns, we operate under a strict **No Return and No Refund Policy after payment has been successfully processed.**
+            Due to the nature of the services provided on the SNAAPII platform, which involve immediate access to our network, tools, and resources for collaborations and campaigns, we operate under a strict No Return and No Refund Policy after payment has been successfully processed.
           </p>
 
           <p className="text-base sm:text-lg leading-relaxed">

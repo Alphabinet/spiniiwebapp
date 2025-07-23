@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ShoppingCart, AlertCircle, Instagram, IndianRupee, Briefcase, Globe } from "lucide-react";
 import Image from "next/image"; // Import the Next.js Image component
+import Footer from "@/app/components/Footer";
 
 // Type definition for Creator data
 interface Creator {
@@ -351,6 +352,8 @@ export default function CreatorDetailPage() {
           </div>
         </div>
       </div>
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

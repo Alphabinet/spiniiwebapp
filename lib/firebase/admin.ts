@@ -1,30 +1,37 @@
 // lib/firebase/admin.ts
 import admin from 'firebase-admin';
-// import { serviceAccount } from './serviceAccountConfig'; // Assuming this is not used directly for env vars
 
-const projectId = process.env.FIREBASE_PROJECT_ID;
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+let adminDb: admin.firestore.Firestore;
+let adminAuth: admin.auth.Auth;
 
-if (!projectId || !clientEmail || !privateKey) {
-  console.error("CRITICAL ERROR: Firebase Admin environment variables (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY) are not set. Check your .env.local file and deployment environment.");
-} else {
-  if (admin.apps.length === 0) {
+// This condition prevents the app from initializing multiple times,
+// which is a common issue in Next.js development environment.
+if (admin.apps.length === 0) {
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  // The private key from an environment variable needs its newlines restored.
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  if (projectId && clientEmail && privateKey) {
     try {
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: projectId,
-          clientEmail: clientEmail,
-          privateKey: privateKey.replace(/\\n/g, '\n'),
+          projectId,
+          clientEmail,
+          privateKey,
         }),
       });
-      console.log("Firebase Admin SDK initialized successfully.");
+      console.log("✅ Firebase Admin SDK initialized successfully.");
     } catch (error: any) {
-      console.error("Firebase Admin SDK initialization error:", error.message);
+      console.error("🔥 Firebase Admin SDK initialization error:", error.message);
     }
+  } else {
+    console.warn("⚠️ Firebase Admin environment variables are not set. Skipping initialization.");
   }
 }
 
-const db = admin.apps.length > 0 ? admin.firestore() : (null as any);
+// Assign the initialized services to the exports
+adminDb = admin.firestore();
+adminAuth = admin.auth();
 
-export { db };
+export { adminDb, adminAuth };

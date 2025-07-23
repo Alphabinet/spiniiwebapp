@@ -1,41 +1,26 @@
-// app/creator-dashboard/page.tsx (or wherever your CreatorDashboard is)
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
-import { auth, db } from "@/lib/firebaseConfig";
+import { auth, db, storage } from "@/lib/firebaseConfig";
 import {
-    collection,
-    query,
-    where,
-    onSnapshot,
-    DocumentData,
-    doc,
-    setDoc,
-    updateDoc,
-    serverTimestamp,
-    orderBy,
-    Timestamp,
-    FieldValue,
-    limit,
-    writeBatch,
+    collection, query, where, onSnapshot, DocumentData, doc, setDoc,
+    updateDoc, serverTimestamp, orderBy, Timestamp, FieldValue, limit,
+    writeBatch, addDoc, getDocs
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Import storage functions
 import Link from "next/link";
+import { useRouter } from 'next/navigation';
 import { User as FirebaseUser } from "firebase/auth";
 import {
-    UsersIcon,
-    PlayIcon,
-    EyeIcon,
-    BellAlertIcon,
-    CheckCircleIcon,
-    InformationCircleIcon,
-    ChevronDownIcon,
-    ChevronUpIcon,
+    UsersIcon, PlayIcon, EyeIcon, CheckCircleIcon, UserCircleIcon, DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import Image from "next/image";
 import React from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import Script from 'next/script';
 
-// --- Type Definitions (Keeping as is) ---
+// --- Type Definitions ---
 interface ApplicationData {
     id: string;
     fullName: string;
@@ -57,45 +42,11 @@ interface ApplicationData {
     profilePictureUrl: string;
     userId: string;
     status: 'pending' | 'approved' | 'rejected';
-    timestamp: FirestoreTimestamp;
-    updatedAt?: FirestoreTimestamp;
-    subscriptionStatus?: 'active' | 'inactive';
-    subscriptionExpiresAt?: Timestamp;
-    adminFeedback?: string;
-}
-
-interface ApplicationFormProps {
-    user: FirebaseUser | null | undefined;
-    existingApplication: ApplicationData | null;
-    isSubscribed: boolean;
-}
-
-interface ApplicationStatusProps {
-    application: ApplicationData | null;
-}
-
-interface CreatorData extends DocumentData {
-    profilePictureUrl?: string;
-    fullName: string;
-    instagramProfileLink: string;
-    instagramUsername: string;
-    totalFollowers?: string | number;
-    avgReelViews?: string | number;
-    storyAverageViews?: string | number;
-    status: 'pending' | 'approved' | 'rejected';
-    timestamp?: Timestamp;
+    timestamp: Timestamp;
     updatedAt?: Timestamp;
     subscriptionStatus?: 'active' | 'inactive';
     subscriptionExpiresAt?: Timestamp;
-}
-
-interface NotificationItem {
-    id: string;
-    message: string;
-    timestamp: Timestamp;
-    read: boolean;
-    type: 'approval' | 'message' | 'announcement' | 'application_status';
-    link?: string;
+    adminFeedback?: string;
 }
 
 interface UserData {
@@ -108,6 +59,140 @@ interface UserData {
     accountType?: 'normal' | 'creator';
     updatedAt?: Timestamp | FieldValue;
     createdAt?: Timestamp | FieldValue;
+    subscriptionStatus?: 'active' | 'inactive';
+    subscriptionExpiresAt?: Timestamp;
+}
+
+interface Activity {
+    type: string;
+    description: string;
+    time: string; // Already formatted string
+}
+
+// ===== Subscription Component =====
+function SubscriptionCard({ user, userData }: { user: FirebaseUser, userData: UserData | null }) {
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState('');
+    const [isSDKReady, setIsSDKReady] = useState(false);
+
+    const plan = { name: "Creator Pro Monthly", amount: 1.00 }; // Changed to 1 INR
+
+    const handlePurchase = async () => {
+        if (!isSDKReady) {
+            setMessage('Payment SDK not ready. Please wait a moment.');
+            return;
+        }
+        if (!userData?.mobileNumber) {
+            setMessage('Mobile number is required. Please update your profile first.');
+            return;
+        }
+
+        setLoading(true);
+        setMessage('');
+
+        try {
+            const token = await user.getIdToken();
+
+            const response = await fetch('/api/cashfree/subscribe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    userEmail: user.email,
+                    userName: userData.fullName || user.displayName,
+                    userPhone: userData.mobileNumber,
+                    plan: plan,
+                    userId: user.uid, // Pass userId for server-side order storage
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.payment_session_id) {
+                const cashfree = (window as any).Cashfree({ mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || "production" });
+                cashfree.checkout({
+                    paymentSessionId: data.payment_session_id,
+                    redirectTarget: "_self"
+                });
+
+                // IMPORTANT: Removed client-side subscription status update here.
+                // The actual subscription status update should happen ONLY after Cashfree
+                // confirms payment via webhook or direct verification API call on redirect.
+
+            } else {
+                setMessage(`Error: ${data.message || 'Could not initiate payment.'}`);
+            }
+        } catch (error) {
+            setMessage('An unexpected error occurred.');
+            console.error("Subscription purchase error:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const isSubscribed = userData?.subscriptionStatus === 'active' &&
+        (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
+
+    return (
+        <>
+            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} />
+            <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
+                {!isSubscribed && ( // Show OFF tag only if not subscribed
+                    <div className="absolute top-0 right-0 h-24 w-24">
+                        <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
+                            OFF
+                        </div>
+                    </div>
+                )}
+                <div className="text-center">
+                    <p className={`font-semibold text-sm sm:text-base ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}>PREMIUM MEMBERSHIP</p>
+                    <h3 className="text-xl sm:text-2xl font-bold mt-1">EXCLUSIVE ACCESS</h3>
+                </div>
+                {isSubscribed ? (
+                    <div className="border border-green-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-green-900/50">
+                        <p className="text-3xl sm:text-4xl font-bold">Expires On:</p>
+                        <p className="text-2xl sm:text-3xl font-bold mt-1">
+                            {userData?.subscriptionExpiresAt ? new Date(userData.subscriptionExpiresAt.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50">
+                        <p className="text-4xl sm:text-5xl font-bold text-white">₹{plan.amount} <span className="text-xl sm:text-2xl text-gray-400 line-through ml-2">₹999</span></p>
+                        <p className="text-gray-300 text-sm sm:text-base">per month</p>
+                    </div>
+                )}
+                {!isSubscribed && ( // Show LIMITED TIME OFFER only if not subscribed
+                    <div className="text-center mb-6 sm:mb-8">
+                        <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
+                            LIMITED TIME OFFER
+                        </p>
+                    </div>
+                )}
+                <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
+                </ul>
+                <button
+                    onClick={handlePurchase}
+                    disabled={loading || isSubscribed}
+                    className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
+                >
+                    {loading ? "Processing..." : (isSubscribed ? "Subscribed" : "Get Started")}
+                </button>
+                {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
+                {isSubscribed && <p className="text-center mt-4 text-xs sm:text-sm text-green-100">Enjoy your premium benefits!</p>}
+                <p className={`text-xs text-center mt-4 ${isSubscribed ? 'text-green-200' : 'text-gray-400'}`}>
+                    By {isSubscribed ? "being subscribed" : "subscribing"}, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
+                </p>
+            </div>
+        </>
+    );
 }
 
 // ===== Success Modal Component =====
@@ -147,15 +232,6 @@ const formatDate = (timestamp: Timestamp | null | undefined) => {
     } catch (error) {
         console.error("Error formatting date timestamp:", error);
         return "Invalid Date";
-    }
-};
-
-const formatNotificationTime = (timestamp: Timestamp) => {
-    try {
-        return new Date(timestamp.toDate()).toLocaleString();
-    } catch (error) {
-        console.error("Error formatting notification timestamp:", error);
-        return 'Invalid Date';
     }
 };
 
@@ -241,191 +317,123 @@ export function MobileNumberPrompt({ onSave }: { onSave: (mobileNumber: string) 
     );
 }
 
-export function NormalUserProfile({ user }: { user: FirebaseUser }) {
-    const router = useRouter(); // Use useRouter here
-    const [userData, setUserData] = useState<DocumentData | null>(null);
-    const [loading, setLoading] = useState(true);
+export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user: FirebaseUser, userData: UserData | null, onMobileNumberSave: (mobileNumber: string) => Promise<void> }) {
     const [formData, setFormData] = useState({ fullName: '', mobileNumber: '', cityState: '', gender: '' });
     const [isSaving, setIsSaving] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [isMobileNumberMissing, setIsMobileNumberMissing] = useState(false);
 
     useEffect(() => {
-        if (!user) return;
-        const userDocRef = doc(db, "users", user.uid);
-        const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setUserData(data);
-                setFormData({
-                    fullName: data.fullName || user.displayName || '',
-                    mobileNumber: data.mobileNumber || '',
-                    cityState: data.cityState || '',
-                    gender: data.gender || '',
-                });
-                if (!data.mobileNumber) {
-                    setIsMobileNumberMissing(true);
-                } else {
-                    setIsMobileNumberMissing(false);
-                }
-            } else {
-                setFormData(prev => ({ ...prev, fullName: user.displayName || '' }));
-                setIsMobileNumberMissing(true);
-            }
-            setLoading(false);
+        if (!user || !userData) return;
+        setFormData({
+            fullName: userData.fullName || user.displayName || '',
+            mobileNumber: userData.mobileNumber || '',
+            cityState: userData.cityState || '',
+            gender: userData.gender || '',
         });
-        return () => unsubscribe();
-    }, [user]);
+        setIsMobileNumberMissing(!userData.mobileNumber);
+    }, [user, userData]);
 
     const handleSave = async (e: React.FormEvent | string) => {
+        let mobileNumberToSave = typeof e === 'string' ? e : formData.mobileNumber;
+
         if (typeof e !== 'string') {
             e.preventDefault();
         }
+
+        if (!mobileNumberToSave.trim() || !/^\d{10,15}$/.test(mobileNumberToSave)) {
+            console.error("Invalid mobile number provided.");
+            if (typeof e !== 'string') {
+                setSuccessMessage("Please enter a valid mobile number (10-15 digits).");
+                setTimeout(() => setSuccessMessage(''), 3000);
+            }
+            return;
+        }
+
         setIsSaving(true);
         const userDocRef = doc(db, "users", user.uid);
         try {
             const dataToSave: UserData = {
                 ...formData,
+                mobileNumber: mobileNumberToSave,
                 email: user.email,
                 userId: user.uid,
-                accountType: 'normal',
+                accountType: 'normal', // Ensure accountType is normal if it's the normal profile
                 updatedAt: serverTimestamp(),
             };
-            if (typeof e === 'string') {
-                dataToSave.mobileNumber = e;
-            }
-            if (!userData) {
+            if (!userData || !userData.createdAt) {
                 dataToSave.createdAt = serverTimestamp();
             }
             await setDoc(userDocRef, dataToSave, { merge: true });
-            if (isMobileNumberMissing && dataToSave.mobileNumber) {
-                setIsMobileNumberMissing(false);
-            }
+
+            setIsMobileNumberMissing(false);
             setSuccessMessage('Profile updated successfully!');
             setTimeout(() => setSuccessMessage(''), 3000);
         } catch (error) {
             console.error("Failed to save profile", error);
-            if (typeof e === 'string') throw error;
+            setSuccessMessage('Failed to save profile. Please try again.');
+        } finally {
+            setIsSaving(false);
         }
-        setIsSaving(false);
     };
 
-    const handlePromptSave = async (mobileNumber: string) => {
-        await handleSave(mobileNumber);
-    };
-
-    const handleStartSubscription = () => {
-        // Redirect to the new subscription page
-        router.push('/subscription');
-    };
-
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
-            </div>
-        );
+    if (!user) { // Ensure user is available before attempting to render anything
+        return null;
     }
 
     if (isMobileNumberMissing) {
-        return <MobileNumberPrompt onSave={handlePromptSave} />;
+        return <MobileNumberPrompt onSave={onMobileNumberSave} />;
     }
 
-    const FeatureListItem = ({ children }: { children: React.ReactNode }) => (
-        <li className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-            </svg>
-            <span className="text-white/90">{children}</span>
-        </li>
-    );
-
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {/* Personal Information Section (Left on larger screens) */}
-            <div className="md:col-span-1 lg:col-span-2 bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                <div className="flex items-center gap-3 mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
-                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold uppercase tracking-wider">Normal User</span>
-                </div>
-                <form onSubmit={handleSave} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                            <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-                            <input type="tel" value={formData.mobileNumber} onChange={e => setFormData({ ...formData, mobileNumber: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                            <input type="email" value={user.email || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">City / State</label>
-                            <input type="text" value={formData.cityState} onChange={e => setFormData({ ...formData, cityState: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                            <select value={formData.gender} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500">
-                                <option value="">Select...</option>
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4">
-                        <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
-                            {isSaving ? "Saving..." : "Update Profile"}
-                        </button>
-                        {successMessage && <p className="text-green-600 text-sm font-medium">{successMessage}</p>}
-                    </div>
-                </form>
+        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+            <div className="flex items-center gap-3 mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold uppercase tracking-wider">Normal User</span>
             </div>
-            {/* Subscription Card for Normal User - always in the right column */}
-            <div className="md:col-span-1 lg:col-span-1 bg-zinc-800 p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden">
-                <div className="absolute top-0 right-0 h-24 w-24">
-                    <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
-                        OFF
+            <form onSubmit={handleSave} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input type="text" value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+                        <input type="tel" value={formData.mobileNumber} onChange={e => setFormData({ ...formData, mobileNumber: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                        <input type="email" value={user.email || ''} disabled className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">City / State</label>
+                        <input type="text" value={formData.cityState} onChange={e => setFormData({ ...formData, cityState: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                        <select value={formData.gender} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full px-3 py-2 border rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500">
+                            <option value="">Select...</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
                 </div>
-                <div className="text-center">
-                    <p className="font-semibold text-yellow-400 tracking-widest">PREMIUM MEMBERSHIP</p>
-                    <h3 className="text-xl font-bold text-white mt-1">EXCLUSIVE ACCESS</h3>
+                <div className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4">
+                    <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
+                        {isSaving ? "Saving..." : "Update Profile"}
+                    </button>
+                    {successMessage && <p className="text-green-600 text-sm font-medium">{successMessage}</p>}
                 </div>
-                <div className="border border-yellow-400/50 rounded-xl p-6 my-8 text-center bg-zinc-900/50">
-                    <p className="text-5xl font-bold text-white">
-                        ₹249
-                        <span className="text-2xl text-gray-400 line-through ml-2">₹999</span>
-                    </p>
-                    <p className="text-gray-300">per month</p>
-                </div>
-                <div className="text-center mb-8">
-                    <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
-                        LIMITED TIME OFFER
-                    </p>
-                </div>
-                <ul className="space-y-4 mb-10 flex-grow">
-                    <FeatureListItem>Premium profile placement on homepage</FeatureListItem>
-                    <FeatureListItem>Unlimited brand collaborations</FeatureListItem>
-                    <FeatureListItem>Secure payment protection</FeatureListItem>
-                    <FeatureListItem>Dedicated manager support 24/7</FeatureListItem>
-                    <FeatureListItem>Priority access to new campaigns</FeatureListItem>
-                </ul>
-                <button
-                    onClick={handleStartSubscription}
-                    className="w-full text-center px-8 py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-all duration-300 transform hover:scale-105 shadow-lg"
-                >
-                    GET STARTED NOW
-                </button>
-                <p className="text-xs text-gray-400 text-center mt-4">
-                    By subscribing, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
-                </p>
-            </div>
+            </form>
         </div>
     );
+}
+
+interface ApplicationFormProps {
+    user: FirebaseUser | null | undefined;
+    existingApplication: ApplicationData | null;
+    isSubscribed: boolean;
 }
 
 export function ApplicationForm({ user, existingApplication, isSubscribed }: ApplicationFormProps) {
@@ -456,10 +464,6 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
     const [errors, setErrors] = useState<{ [key: string]: string }>({});
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        // This useEffect is now empty or can be removed if no other side effects are needed.
-    }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -524,9 +528,11 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                 ...formData,
                 profilePictureUrl: imageUrl,
                 userId: user.uid,
-                status: "pending",
+                status: existingApplication?.status || "pending", // Keep existing status on update, default to pending
                 timestamp: existingApplication?.timestamp || serverTimestamp(),
                 updatedAt: serverTimestamp(),
+                // Do NOT set subscriptionStatus or subscriptionExpiresAt here directly from the form.
+                // These are managed by the payment flow and server-side verification.
             };
 
             if (existingApplication) {
@@ -576,7 +582,8 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
 
                 <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
                     <div className="space-y-4 sm:space-y-6">
-                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-b pb-2">Personal Details</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div>
                                 <label htmlFor="fullName" className="block text-sm font-medium text-gray-800">Full Name</label>
                                 <p className="text-xs text-gray-500 mb-1">Enter your full legal name.</p>
@@ -614,7 +621,8 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                     </div>
 
                     <div className="space-y-4 sm:space-y-6 pt-4 border-t">
-                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-b pb-2">Instagram Details</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div>
                                 <label htmlFor="instagramUsername" className="block text-sm font-medium text-gray-800">Instagram Username</label>
                                 <p className="text-xs text-gray-500 mb-1">Example: @yourusername</p>
@@ -667,7 +675,8 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                     </div>
 
                     <div className="space-y-4 sm:space-y-6 pt-4 border-t">
-                        <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-b pb-2">Content & Pricing</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <div>
                                 <label htmlFor="contentCategory" className="block text-sm font-medium text-gray-800">Content Category</label>
                                 <p className="text-xs text-gray-500 mb-1">e.g. Fashion, Tech, Comedy, etc.</p>
@@ -739,7 +748,17 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
 
                         <button
                             type="button"
-                            onClick={() => { /* Your reset logic */ }}
+                            onClick={() => {
+                                setFormData({
+                                    fullName: "", mobileNumber: "", emailAddress: "", cityState: "", gender: "",
+                                    instagramUsername: "", instagramProfileLink: "", totalFollowers: "", avgReelViews: "",
+                                    storyAverageViews: "", contentCategory: "", contentLanguages: "", reelPrice: "",
+                                    storyPrice: "", reelsStoryPrice: "", deliveryDuration: "",
+                                });
+                                setImage(null);
+                                setImagePreview(null);
+                                setErrors({});
+                            }}
                             className="w-full py-2.5 px-4 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 text-sm sm:text-base"
                         >
                             Reset Form
@@ -751,7 +770,7 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
     );
 }
 
-export function ApplicationStatus({ application }: ApplicationStatusProps) {
+export function ApplicationStatus({ application }: { application: ApplicationData | null }) {
     if (!application) {
         return (
             <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-6 text-center">
@@ -783,7 +802,7 @@ export function ApplicationStatus({ application }: ApplicationStatusProps) {
         }
     };
 
-    const formatDate = (timestamp: FirestoreTimestamp) => {
+    const formatDateForStatus = (timestamp: Timestamp) => {
         if (!timestamp) return "N/A";
         const date = timestamp.toDate();
         return date.toLocaleDateString("en-US", {
@@ -812,11 +831,11 @@ export function ApplicationStatus({ application }: ApplicationStatusProps) {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <div>
                                         <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Submitted On</h3>
-                                        <p className="font-medium text-sm sm:text-base">{formatDate(application.timestamp)}</p>
+                                        <p className="font-medium text-sm sm:text-base">{formatDateForStatus(application.timestamp)}</p>
                                     </div>
                                     <div>
                                         <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Last Updated</h3>
-                                        <p className="font-medium text-sm sm:text-base">{application.updatedAt ? formatDate(application.updatedAt) : "N/A"}</p>
+                                        <p className="font-medium text-sm sm:text-base">{application.updatedAt ? formatDateForStatus(application.updatedAt) : "N/A"}</p>
                                     </div>
                                     <div>
                                         <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Full Name</h3>
@@ -831,59 +850,59 @@ export function ApplicationStatus({ application }: ApplicationStatusProps) {
                                 </div>
                             </div>
                         </div>
-                        <div className="border-t border-gray-200 pt-5 sm:pt-6">
-                            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Pricing Information</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel Price</h3>
-                                    <p className="text-base sm:text-lg font-bold">₹{application.reelPrice}</p>
-                                </div>
-                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Story Price</h3>
-                                    <p className="text-base sm:text-lg font-bold">₹{application.storyPrice}</p>
-                                </div>
-                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel + Story</h3>
-                                    <p className="text-base sm:text-lg font-bold">₹{application.reelsStoryPrice}</p>
-                                </div>
+                    </div>
+                    <div className="border-t border-gray-200 pt-5 sm:pt-6">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Pricing Information</h2>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel Price</h3>
+                                <p className="text-base sm:text-lg font-bold">₹{application.reelPrice}</p>
+                            </div>
+                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Story Price</h3>
+                                <p className="text-base sm:text-lg font-bold">₹{application.storyPrice}</p>
+                            </div>
+                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel + Story</h3>
+                                <p className="text-base sm:text-lg font-bold">₹{application.reelsStoryPrice}</p>
                             </div>
                         </div>
                     </div>
-                    <div className="sm:pl-4">
-                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
-                            <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4">Profile Information</h2>
-                            {application.profilePictureUrl ? (
-                                <div className="mb-3 sm:mb-4">
-                                    <Image src={application.profilePictureUrl} alt="Profile" width={128} height={128} className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg object-cover mx-auto border-2 border-gray-300" />
-                                </div>
-                            ) : (
-                                <div className="bg-gray-200 border-2 border-dashed rounded-xl w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
-                                    <svg className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 012-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                </div>
-                            )}
-                            <div className="space-y-2 sm:space-y-3">
-                                <div>
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Email</h3>
-                                    <p className="font-medium text-sm sm:text-base">{application.emailAddress}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Phone</h3>
-                                    <p className="font-medium text-sm sm:text-base">{application.mobileNumber}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Location</h3>
-                                    <p className="font-medium text-sm sm:text-base">{application.cityState}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Gender</h3>
-                                    <p className="font-medium text-sm sm:text-base">{application.gender}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Delivery Time</h3>
-                                    <p className="font-medium text-sm sm:text-base">{application.deliveryDuration}</p>
-                                </div>
+                </div>
+                <div className="sm:pl-4">
+                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
+                        <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4">Profile Information</h2>
+                        {application.profilePictureUrl ? (
+                            <div className="mb-3 sm:mb-4">
+                                <Image src={application.profilePictureUrl} alt="Profile" width={128} height={128} className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg object-cover mx-auto border-2 border-gray-300" />
+                            </div>
+                        ) : (
+                            <div className="bg-gray-200 border-2 border-dashed rounded-xl w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
+                                <svg className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 012-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                            </div>
+                        )}
+                        <div className="space-y-2 sm:space-y-3">
+                            <div>
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Email</h3>
+                                <p className="font-medium text-sm sm:text-base">{application.emailAddress}</p>
+                            </div>
+                            <div>
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Phone</h3>
+                                <p className="font-medium text-sm sm:text-base">{application.mobileNumber}</p>
+                            </div>
+                            <div>
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Location</h3>
+                                <p className="font-medium text-sm sm:text-base">{application.cityState}</p>
+                            </div>
+                            <div>
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Gender</h3>
+                                <p className="font-medium text-sm sm:text-base">{application.gender}</p>
+                            </div>
+                            <div>
+                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Delivery Time</h3>
+                                <p className="font-medium text-sm sm:text-base">{application.deliveryDuration}</p>
                             </div>
                         </div>
                     </div>
@@ -905,125 +924,164 @@ export function ApplicationStatus({ application }: ApplicationStatusProps) {
     );
 }
 
-export default function CreatorDashboard() {
+export default function CreatorDashboardPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+            <CreatorDashboard />
+        </Suspense>
+    );
+}
+
+function CreatorDashboard() {
     const [user] = useAuthState(auth);
-    const [creatorData, setCreatorData] = useState<CreatorData | null>(null);
+    const router = useRouter();
+    const [userData, setUserData] = useState<UserData | null>(null);
+    const [creatorData, setCreatorData] = useState<ApplicationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-    const [notificationsLoading, setNotificationsLoading] = useState(true);
-    const [showNotifications, setShowNotifications] = useState(false);
+    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile'); // Default to profile for new users
 
-    // Effect for Creator Data & User Account Type
+
+    // Effect for User Data, Creator Data & Account Type
     useEffect(() => {
         if (!user) {
             setLoading(false);
+            router.push('/login');
             return;
         }
 
-        const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid));
-        const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
-            const userDocRef = doc(db, "users", user.uid);
-            if (!snapshot.empty) {
-                const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as CreatorData;
-                setCreatorData(data);
+        const userDocRef = doc(db, "users", user.uid);
+        const unsubscribeUser = onSnapshot(userDocRef, async (userSnap) => {
+            let fetchedUserData: UserData | null = null;
+            if (userSnap.exists()) {
+                fetchedUserData = userSnap.data() as UserData;
+                setUserData(fetchedUserData);
 
-                try {
-                    await setDoc(userDocRef, {
-                        accountType: 'creator',
-                        creatorApplicationId: data.id
-                    }, { merge: true });
-                } catch (error) {
-                    console.error("Error updating user account type to creator:", error);
+                // Check subscription expiry
+                if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt) {
+                    const now = new Date();
+                    const expiryDate = fetchedUserData.subscriptionExpiresAt.toDate();
+                    if (now > expiryDate) {
+                        console.log("Subscription expired. Setting to inactive.");
+                        await updateDoc(userDocRef, {
+                            subscriptionStatus: 'inactive',
+                            updatedAt: serverTimestamp(),
+                        });
+                        fetchedUserData.subscriptionStatus = 'inactive'; // Update local state immediately
+                    }
                 }
 
-                const activities: Activity[] = [];
-                if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
-                if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
-                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
-                } else if (data.updatedAt && !data.timestamp) {
-                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                // If user data exists and mobile number is missing, set initial view to profile
+                if (!fetchedUserData.mobileNumber) {
+                    setView('profile');
                 }
-
-                if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
-                setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
-
             } else {
-                setCreatorData(null);
+                // Create a basic user doc if it doesn't exist
+                const initialData = {
+                    userId: user.uid,
+                    email: user.email,
+                    fullName: user.displayName || '',
+                    createdAt: serverTimestamp(),
+                    accountType: 'normal',
+                    subscriptionStatus: 'inactive',
+                };
+                await setDoc(userDocRef, initialData, { merge: true });
+                fetchedUserData = initialData as UserData;
+                setUserData(initialData as UserData);
+                setView('profile'); // New user, prompt for profile completion
+            }
 
-                try {
-                    await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
-                } catch (error) {
-                    console.error("Error updating user account type to normal:", error);
+            // Now fetch creator application data
+            const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
+            const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
+                let fetchedCreatorData: ApplicationData | null = null;
+                if (!snapshot.empty) {
+                    const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
+                    fetchedCreatorData = data;
+                    setCreatorData(data);
+
+                    // Update user's accountType to 'creator' if it's not already
+                    if (fetchedUserData?.accountType !== 'creator') {
+                        try {
+                            await setDoc(userDocRef, {
+                                accountType: 'creator',
+                                creatorApplicationId: data.id,
+                                // subscriptionStatus: data.subscriptionStatus, // Removed direct sync from application here
+                                // subscriptionExpiresAt: data.subscriptionExpiresAt, // Removed direct sync from application here
+                            }, { merge: true });
+                        } catch (error) {
+                            console.error("Error updating user account type to creator:", error);
+                        }
+                    }
+                    // If creator application exists and approved, default view to dashboard
+                    if (data.status === 'approved') {
+                        setView('dashboard');
+                    } else {
+                        setView('applicationForm'); // If not approved, show application form/status
+                    }
+
+
+                    const activities: Activity[] = [];
+                    if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
+                    if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
+                        activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                    } else if (data.updatedAt && !data.timestamp) {
+                        activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                    }
+
+                    if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
+                    setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
+
+                } else {
+                    setCreatorData(null);
+                    // Update user's accountType to 'normal' if it's not already
+                    if (fetchedUserData?.accountType !== 'normal') {
+                        try {
+                            await setDoc(userDocRef, { accountType: 'normal', creatorApplicationId: FieldValue.delete() }, { merge: true });
+                        } catch (error) {
+                            console.error("Error updating user account type to normal:", error);
+                        }
+                    }
+                    // If no creator application, ensure view is profile or application form
+                    if (!fetchedUserData?.mobileNumber) { // Prioritize mobile number prompt
+                        setView('profile');
+                    } else {
+                        setView('applicationForm'); // Default to application form for normal users
+                    }
                 }
+                setLoading(false);
+            }, (error) => {
+                console.error("Error fetching creator data:", error);
+                setLoading(false);
+            });
+
+            return () => unsubscribeCreator(); // Cleanup for creator snapshot
+        }, (error) => {
+            console.error("Error fetching user data:", error);
+            setLoading(false);
+        });
+
+        return () => unsubscribeUser(); // Cleanup for user snapshot
+    }, [user, router]);
+
+    const handleMobileNumberSave = async (mobileNumber: string) => {
+        if (!user) throw new Error("User not authenticated.");
+        const userDocRef = doc(db, "users", user.uid);
+        try {
+            await updateDoc(userDocRef, { mobileNumber: mobileNumber, updatedAt: serverTimestamp() });
+            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null); // Update local state
+            // After saving mobile, if a creator application already exists and is approved, go to dashboard
+            // Otherwise, if no creator application exists, guide to the application form
+            if (creatorData && creatorData.status === 'approved') {
+                setView('dashboard');
+            } else {
+                setView('applicationForm'); // Direct to application form after saving mobile number
             }
-            setLoading(false);
-        }, (error) => {
-            console.error("Error fetching creator data:", error);
-            setLoading(false);
-        });
-
-        return () => {
-            unsubscribeCreator();
-        };
-    }, [user]);
-
-    // Effect for User Notifications on Dashboard
-    useEffect(() => {
-        if (!user) {
-            setNotifications([]);
-            setNotificationsLoading(false);
-            return;
-        }
-
-        const notificationsCollectionRef = collection(db, `users/${user.uid}/notifications`);
-        const q = query(notificationsCollectionRef, orderBy("timestamp", "desc"), limit(10));
-
-        const unsubscribeNotifications = onSnapshot(q, (snapshot) => {
-            const fetchedNotifications: NotificationItem[] = [];
-            snapshot.forEach((doc) => {
-                const data = doc.data() as Omit<NotificationItem, 'id'>;
-                fetchedNotifications.push({ id: doc.id, ...data });
-            });
-            setNotifications(fetchedNotifications);
-            setNotificationsLoading(false);
-        }, (error) => {
-            console.error("Error fetching real-time dashboard notifications:", error);
-            setNotificationsLoading(false);
-        });
-
-        return () => unsubscribeNotifications();
-    }, [user]);
-
-    // Function to mark a single notification as read
-    const markNotificationAsRead = async (notificationId: string) => {
-        if (!user) return;
-        try {
-            const notificationRef = doc(db, `users/${user.uid}/notifications`, notificationId);
-            await updateDoc(notificationRef, { read: true });
         } catch (error) {
-            console.error("Error marking notification as read:", error);
+            console.error("Failed to save mobile number from prompt:", error);
+            throw error;
         }
     };
-
-    // Function to mark all notifications as read
-    const markAllNotificationsAsRead = async () => {
-        if (!user || notifications.filter(notif => !notif.read).length === 0) return;
-        try {
-            const batch = writeBatch(db);
-            const notificationsCollectionRef = collection(db, `users/${user.uid}/notifications`);
-
-            notifications.filter(notif => !notif.read).forEach(notif => {
-                const notificationRef = doc(notificationsCollectionRef, notif.id);
-                batch.update(notificationRef, { read: true });
-            });
-            await batch.commit();
-        } catch (error) {
-            console.error("Error marking all notifications as read:", error);
-        }
-    };
-
-    const unreadNotificationsCount = notifications.filter(n => !n.read).length;
 
 
     if (loading) {
@@ -1034,373 +1092,211 @@ export default function CreatorDashboard() {
         );
     }
 
-    // Define the Subscription Card component to avoid repetition
-    // This component is now defined outside the main render logic to be reusable.
-    const SubscriptionCard = ({ type }: { type: 'active' | 'expired' | 'new' }) => (
-        <div className={`bg-zinc-800 p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${type === 'expired' ? 'border-2 border-red-500' : ''}`}>
-            {type !== 'active' && ( // Show OFF tag only for expired/new subscriptions
-                <div className="absolute top-0 right-0 h-24 w-24">
-                    <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
-                        OFF
-                    </div>
-                </div>
-            )}
-            <div className="text-center">
-                <p className="font-semibold text-yellow-400 tracking-widest">PREMIUM MEMBERSHIP</p>
-                <h3 className="text-xl font-bold text-white mt-1">EXCLUSIVE ACCESS</h3>
-            </div>
-            <div className="border border-yellow-400/50 rounded-xl p-6 my-8 text-center bg-zinc-900/50">
-                <p className="text-5xl font-bold text-white">
-                    ₹249
-                    <span className="text-2xl text-gray-400 line-through ml-2">₹999</span>
-                </p>
-                <p className="text-gray-300">per month</p>
-            </div>
-            {type !== 'active' && ( // Show LIMITED TIME OFFER only for expired/new subscriptions
-                <div className="text-center mb-8">
-                    <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
-                        LIMITED TIME OFFER
-                    </p>
-                </div>
-            )}
-            <ul className="space-y-4 mb-10 flex-grow text-left">
-                <li className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-white/90">Premium profile placement on homepage</span>
-                </li>
-                <li className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-white/90">Unlimited brand collaborations</span>
-                </li>
-                <li className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-white/90">Secure payment protection</span>
-                </li>
-                <li className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-white/90">Dedicated manager support 24/7</span>
-                </li>
-                <li className="flex items-center gap-3">
-                    <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-white/90">Priority access to new campaigns</span>
-                </li>
-            </ul>
-            <Link href="/subscription" passHref> {/* Link to the new subscription page */}
-                <span className="block w-full text-center px-8 py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-all duration-300 transform hover:scale-105 shadow-lg cursor-pointer">
-                    {type === 'active' ? 'MANAGE SUBSCRIPTION' : (type === 'expired' ? 'RENEW SUBSCRIPTION' : 'GET STARTED NOW')}
-                </span>
-            </Link>
-            <p className="text-xs text-gray-400 text-center mt-4">
-                By subscribing, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
-            </p>
-        </div>
-    );
+    if (!user) {
+        // Redirection handled by useEffect
+        return null;
+    }
 
-
-    if (loading) {
+    // Ensure userData is available before rendering main content
+    if (!userData) {
         return (
             <div className="flex justify-center items-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-600"></div>
+                <p className="ml-3 text-gray-700">Fetching user data...</p>
             </div>
         );
     }
 
-    // Determine what to render based on creatorData and subscription status
-    if (creatorData) {
-        // User has submitted a creator application
-        const isSubscribed = creatorData.subscriptionStatus === 'active' && creatorData.subscriptionExpiresAt?.toDate() > new Date();
-        const getStatusInfo = (status: string) => {
-            switch (status) {
-                case "approved": return { text: "Approved", color: "text-green-700", bgColor: "bg-green-100" };
-                case "rejected": return { text: "Rejected", color: "text-red-700", bgColor: "bg-red-100" };
-                default: return { text: "Pending Review", color: "text-yellow-700", bgColor: "bg-yellow-100" };
-            }
-        };
-        const applicationStatus = getStatusInfo(creatorData.status);
+    const isUserSubscribed = userData?.subscriptionStatus === 'active' &&
+        (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
 
-        return (
-            <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
-                {/* Always show this top banner regardless of subscription status */}
+    const renderMainContent = () => {
+        if (userData?.mobileNumber === undefined || userData.mobileNumber === null || userData.mobileNumber === '') {
+            return <NormalUserProfile user={user} userData={userData} onMobileNumberSave={handleMobileNumberSave} />;
+        }
+
+        switch (view) {
+            case 'profile':
+                return <NormalUserProfile user={user} userData={userData} onMobileNumberSave={handleMobileNumberSave} />;
+            case 'applicationForm':
+                return <ApplicationForm user={user} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
+            case 'dashboard':
+            default:
+                if (creatorData) {
+                    const statusDisplay = {
+                        "approved": { text: "Approved", color: "text-green-700", bgColor: "bg-green-100" },
+                        "rejected": { text: "Rejected", color: "text-red-700", bgColor: "bg-red-100" },
+                        "pending": { text: "Pending Review", color: "text-yellow-700", bgColor: "bg-yellow-100" },
+                    }[creatorData.status];
+
+                    return (
+                        <>
+                            {/* Creator Profile Summary */}
+                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+                                <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
+                                    <Image
+                                        src={creatorData.profilePictureUrl || 'https://placehold.co/120x120/E9D5FF/4C1D95?text=Photo'}
+                                        alt="Profile"
+                                        width={120}
+                                        height={120}
+                                        className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-purple-200 shadow-sm"
+                                    />
+                                    <div className="flex-1 text-center sm:text-left space-y-1">
+                                        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 sm:gap-3">
+                                            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
+                                            <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider">Creator</span>
+                                        </div>
+                                        <a
+                                            href={creatorData.instagramProfileLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-purple-600 hover:underline font-medium text-sm sm:text-base"
+                                        >
+                                            @{creatorData.instagramUsername}
+                                        </a>
+                                    </div>
+                                    <button onClick={() => setView('applicationForm')} className="w-full sm:w-auto mt-4 sm:mt-0 inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer">
+                                        Manage Application
+                                    </button>
+                                </div>
+                                <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 bg-purple-50 rounded-xl p-4">
+                                    <InfoCard
+                                        title="Followers"
+                                        value={creatorData.totalFollowers || 'N/A'}
+                                        icon={<UsersIcon className="w-6 h-6" />}
+                                    />
+                                    <InfoCard
+                                        title="Avg. Reel Views"
+                                        value={creatorData.avgReelViews || 'N/A'}
+                                        icon={<PlayIcon className="w-6 h-6" />}
+                                    />
+                                    <InfoCard
+                                        title="Avg. Story Views"
+                                        value={creatorData.storyAverageViews || 'N/A'}
+                                        icon={<EyeIcon className="w-6 h-6" />}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Application Status (for creators) */}
+                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
+                                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${statusDisplay.bgColor} ${statusDisplay.color}`}>
+                                    {statusDisplay.text}
+                                </div>
+                                <p className="text-sm text-gray-600 mt-3">{creatorData.status === 'pending' ? 'Our team is reviewing your profile.' : 'You are a verified creator!'}</p>
+                                {creatorData.status === 'rejected' && creatorData.adminFeedback && (
+                                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+                                        <p className="font-semibold mb-1">Admin Feedback:</p>
+                                        <p>{creatorData.adminFeedback}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Recent Activity (for creators) */}
+                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
+                                <ul className="space-y-4">
+                                    {recentActivity.length > 0 ?
+                                        recentActivity.map((activity, index) => (
+                                            <li key={index} className="flex items-center gap-4">
+                                                <ActivityIcon type={activity.type} />
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-800">{activity.description}</p>
+                                                    <p className="text-xs text-gray-500">{activity.time}</p>
+                                                </div>
+                                            </li>
+                                        )) : (
+                                            <p className="text-sm text-gray-500">No recent activity.</p>
+                                        )}
+                                </ul>
+                            </div>
+                        </>
+                    );
+                } else {
+                    return <ApplicationForm user={user} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
+                }
+        }
+    };
+
+
+    return (
+        <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
+            {/* Conditional Creator Pro Banner (only for creators) */}
+            {creatorData && (
                 <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-6 sm:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
                     <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/5 rounded-full filter blur-2xl"></div>
                     <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-white/5 rounded-full filter blur-2xl"></div>
                     <div className="relative z-10">
                         <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
                             <div className="flex items-center gap-4">
-                                <div className="bg-green-400 p-2 rounded-xl"></div>
+                                <span className="p-2 rounded-xl bg-purple-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-yellow-400">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.92 19.4a.562.562 0 0 1-.84-.61l1.285-5.385a.562.562 0 0 0-.182-.557L3.92 9.499a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                                    </svg>
+                                </span>
                                 <h2 className="text-xl sm:text-2xl font-bold tracking-wider uppercase">Creator Pro</h2>
                             </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isSubscribed ? 'bg-green-600 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
-                                {isSubscribed ? 'Active' : 'Inactive'}
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isUserSubscribed ? 'bg-green-600 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+                                {isUserSubscribed ? 'Active' : 'Inactive'}
                             </span>
                         </div>
                         <p className="mt-4 sm:mt-8 text-sm text-purple-200 text-center sm:text-left">
-                            {isSubscribed ? `Your premium subscription is active until ${formatDate(creatorData.subscriptionExpiresAt)}.` : 'Your subscription has expired. Please renew.'}
+                            {isUserSubscribed ? `Your premium subscription is active until ${formatDate(userData.subscriptionExpiresAt)}.` : 'Your subscription has expired or is inactive. Please renew to continue enjoying premium features.'}
                         </p>
                     </div>
                 </div>
+            )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column (Main Content Area) - takes 2/3 width on large screens */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Creator Profile Summary */}
-                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-                                <Image
-                                    src={creatorData.profilePictureUrl || 'https://placehold.co/120x120/E9D5FF/4C1D95?text=Photo'}
-                                    alt="Profile"
-                                    width={120}
-                                    height={120}
-                                    className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-purple-200 shadow-sm"
-                                />
-                                <div className="flex-1 text-center sm:text-left space-y-1">
-                                    <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 sm:gap-3">
-                                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
-                                        <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider">Creator</span>
-                                    </div>
-                                    <a
-                                        href={creatorData.instagramProfileLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-purple-600 hover:underline font-medium text-sm sm:text-base"
-                                    >
-                                        @{creatorData.instagramUsername}
-                                    </a>
-                                </div>
-                                <Link href="/creator-dashboard" className="w-full sm:w-auto mt-4 sm:mt-0">
-                                    <span className="inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer w-full">
-                                        Manage Application
-                                    </span>
-                                </Link>
-                            </div>
-                            <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 bg-purple-50 rounded-xl">
-                                <InfoCard
-                                    title="Followers"
-                                    value={creatorData.totalFollowers || 'N/A'}
-                                    icon={<UsersIcon className="w-6 h-6" />}
-                                />
-                                <InfoCard
-                                    title="Avg. Reel Views"
-                                    value={creatorData.avgReelViews || 'N/A'}
-                                    icon={<PlayIcon className="w-6 h-6" />}
-                                />
-                                <InfoCard
-                                    title="Avg. Story Views"
-                                    value={creatorData.storyAverageViews || 'N/A'}
-                                    icon={<EyeIcon className="w-6 h-6" />}
-                                />
-                            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Main Content Area (Left/Two-thirds) */}
+                <div className="lg:col-span-2 space-y-8">
+                    {/* Dashboard Header/Navigation */}
+                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome, {userData.fullName || 'User'}!</h2>
+                            <p className="text-gray-500 text-sm sm:text-base">{userData.accountType === 'creator' ? "Creator Account" : "Standard Account"}</p>
                         </div>
-
-                        {/* Subscription card for EXPIRED subscriptions (visible on small/medium screens here) */}
-                        {!isSubscribed && (
-                            <div className="lg:hidden"> {/* Only visible on screens smaller than lg */}
-                                <SubscriptionCard type="expired" />
-                            </div>
-                        )}
-
-                        {/* Application Status */}
-                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
-                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${applicationStatus.bgColor} ${applicationStatus.color}`}>
-                                {applicationStatus.text}
-                            </div>
-                            <p className="text-sm text-gray-600 mt-3">{creatorData.status === 'pending' ? 'Our team is reviewing your profile.' : 'You are a verified creator!'}</p>
-                        </div>
-
-                        {/* Recent Activity */}
-                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
-                            <ul className="space-y-4">
-                                {recentActivity.length > 0 ?
-                                    recentActivity.map((activity, index) => (
-                                        <li key={index} className="flex items-center gap-4">
-                                            <ActivityIcon type={activity.type} />
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-800">{activity.description}</p>
-                                                <p className="text-xs text-gray-500">{activity.time}</p>
-                                            </div>
-                                        </li>
-                                    )) : (
-                                        <p className="text-sm text-gray-500">No recent activity.</p>
-                                    )}
-                            </ul>
-                        </div>
-                    </div> {/* End lg:col-span-2 (left column content) */}
-
-                    {/* Right Column (Notifications and Subscription Card for Expired on large screens) */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* NEW: Collapsible Notifications Section (Right Column, for Creators) */}
-                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    <BellAlertIcon className="w-6 h-6 text-purple-600" /> Notifications
-                                    {unreadNotificationsCount > 0 && (
-                                        <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                                            {unreadNotificationsCount} New
-                                        </span>
-                                    )}
-                                </h3>
+                        <div className="flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-end">
+                            <button
+                                onClick={() => setView('profile')}
+                                className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'profile' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                title="My Profile"
+                            >
+                                <UserCircleIcon className="h-5 w-5"/> <span className="hidden sm:inline">Profile</span>
+                            </button>
+                            <button
+                                onClick={() => setView('applicationForm')}
+                                className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'applicationForm' || !creatorData ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                title="Creator Application"
+                            >
+                                <DocumentTextIcon className="h-5 w-5"/> <span className="hidden sm:inline">Application</span>
+                            </button>
+                            {creatorData?.status === 'approved' && ( // Only show dashboard view button if approved creator
                                 <button
-                                    onClick={() => setShowNotifications(!showNotifications)}
-                                    className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1 transition-colors"
+                                    onClick={() => setView('dashboard')}
+                                    className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'dashboard' && creatorData?.status === 'approved' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                    title="Creator Dashboard"
                                 >
-                                    {showNotifications ? 'Hide Notifications' : 'View All Notifications'}
-                                    {showNotifications ? (
-                                        <ChevronUpIcon className="w-4 h-4" />
-                                    ) : (
-                                        <ChevronDownIcon className="w-4 h-4" />
-                                    )}
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25v9m-4.5 0l4.5 4.5M3 12h9.75M3 18h9.75" />
+                                    </svg> <span className="hidden sm:inline">Dashboard</span>
                                 </button>
-                            </div>
-
-                            {showNotifications && (
-                                <>
-                                    {notifications.filter(n => !n.read).length > 0 && (
-                                        <button
-                                            onClick={markAllNotificationsAsRead}
-                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors mb-4 block"
-                                        >
-                                            Mark All As Read
-                                        </button>
-                                    )}
-                                    {notificationsLoading ? (
-                                        <div className="flex justify-center items-center h-32">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div>
-                                        </div>
-                                    ) : notifications.length > 0 ? (
-                                        <ul className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                                            {notifications.map(notif => (
-                                                <li
-                                                    key={notif.id}
-                                                    className={`p-3 rounded-lg flex items-start gap-3 ${notif.read ? 'bg-gray-50 text-gray-600' : 'bg-purple-50 text-gray-800 font-medium'} cursor-pointer hover:bg-purple-100 transition-colors`}
-                                                    onClick={() => markNotificationAsRead(notif.id)}
-                                                >
-                                                    {notif.type === 'approval' || notif.type === 'application_status' ? (
-                                                        <CheckCircleIcon className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                                    ) : (
-                                                        <InformationCircleIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                                                    )}
-                                                    <div>
-                                                        <p className="text-sm">{notif.message}</p>
-                                                        <p className="text-xs text-gray-500 mt-1">{formatNotificationTime(notif.timestamp)}</p>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-gray-500 text-sm">No notifications to display.</p>
-                                    )}
-                                </>
                             )}
                         </div>
-                        {/* Subscription card for EXPIRED subscriptions (visible on large screens here) */}
-                        {!isSubscribed && (
-                            <div className="hidden lg:block"> {/* Only visible on screens larger than lg */}
-                                <SubscriptionCard type="expired" />
-                            </div>
-                        )}
-                    </div> {/* End lg:col-span-1 (Notifications) */}
-
-                </div> {/* End grid-cols-1 lg:grid-cols-3 */}
-
-            </div>
-        );
-    }
-
-    // Default view for normal users (no creator application submitted yet)
-    return (
-        <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Always render NormalUserProfile in a column */}
-                <div className="lg:col-span-2">
-                    <NormalUserProfile user={user!} />
-                </div>
-
-                {/* Render the subscription card in the right column if no creator application exists */}
-                <div className="lg:col-span-1"> {/* This div now directly contains the SubscriptionCard */}
-                    <SubscriptionCard type="new" />
-                </div>
-            </div>
-
-            {user && (
-                <>
-                    {/* Notifications section for Normal User (always in its own column/section) */}
-                    <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 mt-8">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                <BellAlertIcon className="w-6 h-6 text-purple-600" /> Notifications
-                                {unreadNotificationsCount > 0 && (
-                                    <span className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                                        {unreadNotificationsCount} New
-                                    </span>
-                                )}
-                            </h3>
-                            <button
-                                onClick={() => setShowNotifications(!showNotifications)}
-                                className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center gap-1 transition-colors"
-                            >
-                                {showNotifications ? 'Hide Notifications' : 'View All Notifications'}
-                                {showNotifications ? (
-                                    <ChevronUpIcon className="w-4 h-4" />
-                                ) : (
-                                    <ChevronDownIcon className="w-4 h-4" />
-                                )}
-                            </button>
-                        </div>
-
-                        {showNotifications && (
-                            <>
-                                {notifications.filter(n => !n.read).length > 0 && (
-                                    <button
-                                        onClick={markAllNotificationsAsRead}
-                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors mb-4 block"
-                                    >
-                                        Mark All As Read
-                                    </button>
-                                )}
-                                {notificationsLoading ? (
-                                    <div className="flex justify-center items-center h-32">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-400"></div>
-                                    </div>
-                                ) : notifications.length > 0 ? (
-                                    <ul className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                                        {notifications.map(notif => (
-                                            <li
-                                                key={notif.id}
-                                                className={`p-3 rounded-lg flex items-start gap-3 ${notif.read ? 'bg-gray-50 text-gray-600' : 'bg-purple-50 text-gray-800 font-medium'} cursor-pointer hover:bg-purple-100 transition-colors`}
-                                                onClick={() => markNotificationAsRead(notif.id)}
-                                            >
-                                                {notif.type === 'approval' || notif.type === 'application_status' ? (
-                                                    <CheckCircleIcon className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-                                                ) : (
-                                                    <InformationCircleIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                                                )}
-                                                <div>
-                                                    <p className="text-sm">{notif.message}</p>
-                                                    <p className="text-xs text-gray-500 mt-1">{formatNotificationTime(notif.timestamp)}</p>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <p className="text-gray-500 text-sm">No notifications to display.</p>
-                                )}
-                            </>
-                        )}
                     </div>
-                </>
-            )}
+
+                    {renderMainContent()} {/* Render the selected component here */}
+                </div>
+
+                {/* Subscription Card (Right/One-third) */}
+                <div className="lg:col-span-1">
+                    {user && userData && ( // Ensure user and userData are not null
+                        <SubscriptionCard user={user} userData={userData} />
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

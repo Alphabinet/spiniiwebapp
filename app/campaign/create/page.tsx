@@ -1,73 +1,57 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Script from 'next/script';
 import {
-    Loader2,
-    ArrowRight,
-    ArrowLeft,
-    Lock,
-    Users,
-    Calendar,
-    BarChart2,
-    FileText,
-    CheckCircle,
-    User,
-    Instagram,
-    Facebook,
-    Youtube,
-    Check,
-    X,
-    CreditCard,
-    Plus,
-    Minus
+    Loader2, ArrowRight, ArrowLeft, Lock, Users, Calendar,
+    BarChart2, FileText, CheckCircle, User, Instagram, Check,
+    X, CreditCard, Plus, Minus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { format } from 'date-fns';
 import { db, auth } from '@/lib/firebaseConfig';
 import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { cn } from "@/lib/utils"; // Import cn for conditional classnames
+import { cn } from "@/lib/utils";
+
+// --- Type Definitions for Cashfree ---
+interface Cashfree {
+    checkout(payload: { paymentSessionId: string; redirectTarget: '_self' | '_blank' }): void;
+}
+declare global {
+    interface Window {
+        Cashfree: (options: { mode: "sandbox" | "production" }) => Cashfree;
+    }
+}
 
 
 // --- Constants for Pricing ---
 const BUDGET_INCREMENTS = [100, 200, 500, 1000, 2000];
 const SERVICE_FEE_TIERS = [
-    { creators: 5, fee: 1599 },
-    { creators: 10, fee: 4999 },
-    { creators: 20, fee: 15999 },
-    { creators: 30, fee: 41999 },
-    { creators: 40, fee: 79999 },
-    { creators: 50, fee: 99999 },
-    { creators: 100, fee: 219999 },
-    { creators: 200, fee: 399999 },
+    { creators: 5, fee: 1599 }, { creators: 10, fee: 4999 },
+    { creators: 20, fee: 15999 }, { creators: 30, fee: 41999 },
+    { creators: 40, fee: 79999 }, { creators: 50, fee: 99999 },
+    { creators: 100, fee: 219999 }, { creators: 200, fee: 399999 },
 ];
 
 
 // --- Interfaces ---
 interface CampaignFormData {
     campaignName: string;
-    platform: 'Instagram' | 'Youtube' | 'Facebook' | '';
-    services: {
-        reel: number;
-        story: number;
-        reelAndStory: number;
-    };
+    platform: 'Instagram' | '';
+    services: { reel: number; story: number; reelAndStory: number; };
     numberOfCreators: number;
     totalCreatorBudget: number | '';
     minimumFollowers: number | '';
-    averageViews: number | ''; // This field is not used in the form, but kept in interface
+    averageViews: number | '';
     minAge: number | '';
     maxAge: number | '';
     gender: 'Male' | 'Female' | 'Any' | '';
@@ -95,16 +79,6 @@ interface RateCardEntry {
     comboPrice: number;
 }
 
-// --- Type Definitions for Razorpay ---
-interface RazorpaySuccessResponse {
-    razorpay_payment_id: string;
-}
-
-interface RazorpayErrorResponse {
-    error: {
-        description: string;
-    };
-}
 
 // --- Data ---
 const INSTAGRAM_RATE_CARD: RateCardEntry[] = [
@@ -128,7 +102,7 @@ const INSTAGRAM_RATE_CARD: RateCardEntry[] = [
 
 const steps = [
     { name: 'Campaign Details', icon: FileText, fields: ['campaignName', 'platform'] },
-    { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'services'] }, // Added 'services' for validation
+    { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'services'] },
     { name: 'Target Audience', icon: BarChart2, fields: ['minAge', 'maxAge', 'gender', 'location'] },
     { name: 'Content & Deadline', icon: Calendar, fields: ['categories', 'campaignDescription', 'deadline'] },
     { name: 'Owner Details', icon: User, fields: ['ownerFullName', 'contactNumber', 'ownerEmailAddress', 'ownerCity', 'ownerDistrict', 'ownerState', 'ownerCountry'] },
@@ -136,7 +110,6 @@ const steps = [
     { name: 'Confirmation', icon: CheckCircle, fields: [] },
 ];
 
-// --- New and Expanded Categories Array ---
 const ALL_CATEGORIES = [
     'Fashion', 'Beauty', 'Lifestyle', 'Fitness', 'Travel', 'Food', 'Technology',
     'Gaming', 'Comedy', 'Motivation', 'Music', 'Dance', 'Photography', 'Art',
@@ -162,10 +135,10 @@ const CampaignCreationPage = () => {
     });
     const [user, setUser] = useState<FirebaseAuthUser | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [paymentStatus, setPaymentStatus] = useState<'success' | 'failed' | null>(null);
+    const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'failed'>('idle');
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [isClient, setIsClient] = useState(false);
-    // State to hold validation errors
+    const [isCashfreeReady, setIsCashfreeReady] = useState(false);
     const [errors, setErrors] = useState<Partial<Record<keyof CampaignFormData | 'services', string>>>({});
 
     useEffect(() => { setIsClient(true); }, []);
@@ -200,7 +173,7 @@ const CampaignCreationPage = () => {
 
     const estimatedMinimumBudget = useMemo(() => {
         const followers = Number(formData.minimumFollowers);
-        if (!followers || isNaN(followers)) return 0; // Handle NaN for initial empty string
+        if (!followers || isNaN(followers)) return 0;
 
         const reelCost = formData.services.reel * getMinimumBudgetForService(followers, 'reel');
         const storyCost = formData.services.story * getMinimumBudgetForService(followers, 'story');
@@ -220,13 +193,11 @@ const CampaignCreationPage = () => {
         const { name, value, type } = e.target;
         const isNumeric = type === 'number';
         setFormData({ ...formData, [name]: isNumeric ? (value === '' ? '' : Number(value)) : value });
-        // Clear error for the current field when user starts typing
         setErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
     const handleSelectChange = (name: keyof Omit<CampaignFormData, 'services'>, value: string) => {
-        setFormData({ ...formData, [name]: value as any }); // Type assertion for flexibility
-        // Clear error for the current field
+        setFormData({ ...formData, [name]: value as any });
         setErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
@@ -235,7 +206,6 @@ const CampaignCreationPage = () => {
             const newCategories = prev.categories.includes(category)
                 ? prev.categories.filter((c) => c !== category)
                 : [...prev.categories, category];
-            // Clear error for categories if at least one is selected
             if (newCategories.length > 0) {
                 setErrors(prevErrors => ({ ...prevErrors, categories: undefined }));
             }
@@ -253,7 +223,6 @@ const CampaignCreationPage = () => {
                 const newCount = Math.max(0, currentCount + change);
                 newFormData = { ...prev, services: { ...prev.services, [field]: newCount } };
             }
-            // Clear 'services' error if any service count becomes greater than 0
             const totalServices = Object.values(newFormData.services).reduce((sum, count) => sum + count, 0);
             if (totalServices > 0) {
                 setErrors(prevErrors => ({ ...prevErrors, services: undefined }));
@@ -277,32 +246,31 @@ const CampaignCreationPage = () => {
         for (const field of currentFields) {
             const value = formData[field as keyof CampaignFormData];
 
-            if (field === 'services') { // Special handling for services object
+            if (field === 'services') {
                 const totalServices = Object.values(formData.services).reduce((sum, count) => sum + count, 0);
                 if (totalServices === 0) {
                     newErrors.services = 'Please select at least one service.';
                     isValid = false;
                 }
-            } else if (field === 'categories') { // Special handling for categories array
+            } else if (field === 'categories') {
                 if (Array.isArray(value) && value.length === 0) {
                     newErrors.categories = 'Please select at least one category.';
                     isValid = false;
                 }
-            } else if (!value && value !== 0) { // General check for empty values (excluding 0 for numbers)
+            } else if (!value && value !== 0) {
                 newErrors[field as keyof CampaignFormData] = 'This field is required.';
                 isValid = false;
             }
         }
 
-        // Step-specific validations
         switch (currentStep) {
-            case 1: // Services & Budget
+            case 1:
                 if (Number(formData.minimumFollowers) < 1000) {
                     newErrors.minimumFollowers = 'Minimum followers must be at least 1,000.';
                     isValid = false;
                 }
                 break;
-            case 2: // Target Audience
+            case 2:
                 if (Number(formData.minAge) > Number(formData.maxAge)) {
                     newErrors.minAge = 'Min age cannot be greater than max age.';
                     newErrors.maxAge = 'Max age cannot be less than min age.';
@@ -313,13 +281,13 @@ const CampaignCreationPage = () => {
                     isValid = false;
                 }
                 break;
-            case 3: // Content & Deadline
+            case 3:
                 if (formData.deadline && new Date(formData.deadline) < new Date()) {
                     newErrors.deadline = 'Deadline cannot be in the past.';
                     isValid = false;
                 }
                 break;
-            case 4: // Owner Details
+            case 4:
                 const phoneRegex = /^\+?\d{10,15}$/;
                 if (formData.contactNumber && !phoneRegex.test(formData.contactNumber)) {
                     newErrors.contactNumber = 'Please enter a valid Contact Number (10-15 digits).';
@@ -333,7 +301,7 @@ const CampaignCreationPage = () => {
                 break;
         }
 
-        setErrors(newErrors); // Update the error state
+        setErrors(newErrors);
         if (!isValid) {
             toast.error('Please correct the highlighted errors before proceeding.');
         }
@@ -343,21 +311,17 @@ const CampaignCreationPage = () => {
     const nextStep = () => {
         if (validateStep()) {
             setCurrentStep(currentStep + 1);
-            setErrors({}); // Clear errors when moving to the next step
+            setErrors({});
         }
     };
     const prevStep = () => {
         setCurrentStep(currentStep - 1);
-        setErrors({}); // Clear errors when moving back
+        setErrors({});
     };
 
     const getServiceFee = (creators: number): number => {
         if (creators <= 0) return 0;
-        const applicableTier = SERVICE_FEE_TIERS
-            .slice()
-            .reverse()
-            .find(tier => creators >= tier.creators);
-
+        const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
         return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
     };
 
@@ -370,7 +334,11 @@ const CampaignCreationPage = () => {
 
     const handlePayment = async () => {
         if (!user) {
-            toast.error('Authentication error. Please refresh and log in to proceed.');
+            toast.error('Authentication error. Please refresh and log in.');
+            return;
+        }
+        if (!isCashfreeReady) {
+            toast.error('Payment gateway is not ready. Please wait a moment.');
             return;
         }
         if (totalAmount <= 0) {
@@ -379,58 +347,42 @@ const CampaignCreationPage = () => {
         }
 
         setIsSubmitting(true);
+        setPaymentStatus('processing');
+
         try {
-            const loadRazorpayScript = () => new Promise<void>((resolve) => {
-                const script = document.createElement('script');
-                script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-                script.onload = () => resolve();
-                document.body.appendChild(script);
-            });
-            await loadRazorpayScript();
-
-            const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                amount: Math.round(totalAmount * 100), // Razorpay expects amount in paisa
-                currency: 'INR',
-                name: 'Snaapii Campaign',
-                description: `Payment for ${formData.campaignName}`,
-                handler: async (response: RazorpaySuccessResponse) => {
-                    try {
-                        const campaignData = {
-                            ...formData,
-                            costs: { creatorsCost, serviceFee, totalAmount },
-                            userInfo: { uid: user.uid, displayName: user.displayName, email: user.email },
-                            razorpayPaymentId: response.razorpay_payment_id,
-                            status: 'pending_review',
-                            createdAt: new Date().toISOString(),
-                        };
-
-                        await addDoc(collection(db, "campaigns"), campaignData);
-
-                        setPaymentStatus('success');
-                        setCurrentStep(currentStep + 1);
-                        toast.success('Payment successful and campaign created!');
-                    } catch (firestoreError) {
-                        console.error('Error saving campaign to Firestore:', firestoreError);
-                        toast.error('Payment successful, but failed to save campaign data.');
-                        setPaymentStatus('failed');
-                        setCurrentStep(currentStep + 1);
-                    }
+            const token = await user.getIdToken();
+            const response = await fetch('/api/cashfree/create-campaign-order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
-                prefill: { name: formData.ownerFullName, email: formData.ownerEmailAddress, contact: formData.contactNumber },
-                theme: { color: '#8B5CF6' }, // Purple shade for Razorpay theme
-            };
-            // @ts-expect-error Razorpay is loaded dynamically
-            const rzp1 = new window.Razorpay(options);
-            rzp1.on('payment.failed', (response: RazorpayErrorResponse) => {
-                toast.error(`Payment failed: ${response.error.description}`);
-                setPaymentStatus('failed');
-                setCurrentStep(currentStep + 1);
+                body: JSON.stringify({
+                    campaignData: formData,
+                    costs: { creatorsCost, serviceFee, totalAmount }
+                }),
             });
-            rzp1.open();
+
+            const data = await response.json();
+
+            if (data.success && data.payment_session_id) {
+                const cashfree = window.Cashfree({ mode: "sandbox" }); // Use "production" for live
+                cashfree.checkout({
+                    paymentSessionId: data.payment_session_id,
+                    redirectTarget: "_self",
+                });
+                // Note: The user will be redirected. The final status update
+                // should be handled on a dedicated status page or via webhooks.
+                // We will move to confirmation step optimistically, but real status
+                // depends on the redirect.
+            } else {
+                toast.error(data.message || "Could not initiate payment.");
+                setPaymentStatus('failed');
+                setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
+            }
         } catch (err) {
             console.error('An error occurred during payment setup.', err);
-            toast.error('An error occurred during payment setup.');
+            toast.error('An unexpected error occurred during payment setup.');
             setPaymentStatus('failed');
             setCurrentStep(currentStep + 1);
         } finally {
@@ -447,29 +399,18 @@ const CampaignCreationPage = () => {
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="campaignName" className="font-semibold text-gray-700">Campaign Name</Label>
-                                <Input
-                                    id="campaignName"
-                                    name="campaignName"
-                                    value={formData.campaignName}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., Summer Collection Launch"
-                                    className={cn("mt-1", errors.campaignName && 'border-red-500')}
-                                />
+                                <Input id="campaignName" name="campaignName" value={formData.campaignName} onChange={handleInputChange} placeholder="e.g., Summer Collection Launch" className={cn("mt-1", errors.campaignName && 'border-red-500')} />
                                 {errors.campaignName && <p className="text-red-500 text-sm mt-1">{errors.campaignName}</p>}
                             </div>
                             <div>
                                 <Label className="font-semibold text-gray-700">Platform</Label>
-                                <RadioGroup
-                                    value={formData.platform}
-                                    onValueChange={(v) => handleSelectChange('platform', v)}
-                                    className={cn(`grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2`, errors.platform && 'border border-red-500 p-2 rounded-lg')}
-                                >
-                                    {(['Instagram', 'Youtube', 'Facebook'] as const).map(p => {
-                                        const Icon = { Instagram, Youtube, Facebook }[p];
+                                <RadioGroup value={formData.platform} onValueChange={(v) => handleSelectChange('platform', v)} className={cn(`grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2`, errors.platform && 'border border-red-500 p-2 rounded-lg')}>
+                                    {(['Instagram'] as const).map(p => {
+                                        const Icon = { Instagram }[p];
                                         return (
                                             <Label key={p} className={`flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-all ${formData.platform === p ? 'border-purple-600 bg-purple-50 shadow-md' : 'border-gray-300 hover:border-purple-400'}`}>
                                                 <RadioGroupItem value={p} className="sr-only" />
-                                                <Icon className={`h-6 w-6 ${p === 'Instagram' ? 'text-pink-600' : p === 'Youtube' ? 'text-red-600' : 'text-blue-800'}`} />
+                                                <Icon className={`h-6 w-6 ${p === 'Instagram' ? 'text-pink-600' : ''}`} />
                                                 <span className="font-medium">{p}</span>
                                             </Label>
                                         )
@@ -485,20 +426,10 @@ const CampaignCreationPage = () => {
                     <>
                         <h2 className="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Step 2: Services & Budget</h2>
                         <div className="flex flex-col md:flex-row gap-6">
-                            {/* Left Column */}
                             <div className="space-y-6 w-full">
                                 <div>
                                     <Label htmlFor="minimumFollowers" className="font-semibold text-gray-700">Minimum Followers</Label>
-                                    <Input
-                                        id="minimumFollowers"
-                                        name="minimumFollowers"
-                                        type="number"
-                                        min="1000"
-                                        value={formData.minimumFollowers}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., 10000"
-                                        className={cn("mt-1", errors.minimumFollowers && 'border-red-500')}
-                                    />
+                                    <Input id="minimumFollowers" name="minimumFollowers" type="number" min="1000" value={formData.minimumFollowers} onChange={handleInputChange} placeholder="e.g., 10000" className={cn("mt-1", errors.minimumFollowers && 'border-red-500')} />
                                     {errors.minimumFollowers && <p className="text-red-500 text-sm mt-1">{errors.minimumFollowers}</p>}
                                 </div>
                                 <div className="space-y-3">
@@ -518,7 +449,6 @@ const CampaignCreationPage = () => {
                                     {errors.services && <p className="text-red-500 text-sm mt-1">{errors.services}</p>}
                                 </div>
                             </div>
-                            {/* Right Column */}
                             <div className="space-y-6 w-full">
                                 <div className="space-y-3">
                                     <Label className="font-semibold text-gray-700">Number of Creators</Label>
@@ -534,14 +464,7 @@ const CampaignCreationPage = () => {
                                 </div>
                                 <div>
                                     <Label htmlFor="totalCreatorBudget" className="font-semibold text-gray-700">Total Creator Budget (₹)</Label>
-                                    <Input
-                                        id="totalCreatorBudget"
-                                        name="totalCreatorBudget"
-                                        type="text"
-                                        value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`}
-                                        readOnly
-                                        className="mt-1 text-lg font-bold bg-white"
-                                    />
+                                    <Input id="totalCreatorBudget" name="totalCreatorBudget" type="text" value={`₹ ${Number(formData.totalCreatorBudget).toLocaleString('en-IN')}`} readOnly className="mt-1 text-lg font-bold bg-white" />
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {BUDGET_INCREMENTS.map(inc => (
                                             <Button key={inc} variant="outline" size="sm" onClick={() => handleBudgetIncrement(inc)} className="text-xs">
@@ -562,30 +485,12 @@ const CampaignCreationPage = () => {
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <div className="w-full sm:w-1/2">
                                     <Label htmlFor="minAge" className="font-semibold text-gray-700">Minimum Age</Label>
-                                    <Input
-                                        id="minAge"
-                                        name="minAge"
-                                        type="number"
-                                        min="13"
-                                        value={formData.minAge}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., 18"
-                                        className={cn("mt-1", errors.minAge && 'border-red-500')}
-                                    />
+                                    <Input id="minAge" name="minAge" type="number" min="13" value={formData.minAge} onChange={handleInputChange} placeholder="e.g., 18" className={cn("mt-1", errors.minAge && 'border-red-500')} />
                                     {errors.minAge && <p className="text-red-500 text-sm mt-1">{errors.minAge}</p>}
                                 </div>
                                 <div className="w-full sm:w-1/2">
                                     <Label htmlFor="maxAge" className="font-semibold text-gray-700">Maximum Age</Label>
-                                    <Input
-                                        id="maxAge"
-                                        name="maxAge"
-                                        type="number"
-                                        min="13"
-                                        value={formData.maxAge}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., 35"
-                                        className={cn("mt-1", errors.maxAge && 'border-red-500')}
-                                    />
+                                    <Input id="maxAge" name="maxAge" type="number" min="13" value={formData.maxAge} onChange={handleInputChange} placeholder="e.g., 35" className={cn("mt-1", errors.maxAge && 'border-red-500')} />
                                     {errors.maxAge && <p className="text-red-500 text-sm mt-1">{errors.maxAge}</p>}
                                 </div>
                             </div>
@@ -603,14 +508,7 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="location" className="font-semibold text-gray-700">Location (City, State)</Label>
-                                <Input
-                                    id="location"
-                                    name="location"
-                                    value={formData.location}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., Mumbai, Maharashtra"
-                                    className={cn("mt-1", errors.location && 'border-red-500')}
-                                />
+                                <Input id="location" name="location" value={formData.location} onChange={handleInputChange} placeholder="e.g., Mumbai, Maharashtra" className={cn("mt-1", errors.location && 'border-red-500')} />
                                 {errors.location && <p className="text-red-500 text-sm mt-1">{errors.location}</p>}
                             </div>
                         </div>
@@ -624,15 +522,8 @@ const CampaignCreationPage = () => {
                             <div>
                                 <Label className="font-semibold text-gray-700">Categories</Label>
                                 <div className={cn(`flex flex-wrap gap-2 mt-2`, errors.categories && 'border border-red-500 p-2 rounded-lg')}>
-                                    {ALL_CATEGORIES.map((category) => ( // Use ALL_CATEGORIES here
-                                        <Button
-                                            key={category}
-                                            onClick={() => handleCategoryChange(category)}
-                                            variant={formData.categories.includes(category) ? 'default' : 'outline'}
-                                            className={cn("rounded-full text-xs sm:text-sm py-1 px-3",
-                                                formData.categories.includes(category) ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'border-gray-300 hover:bg-gray-100'
-                                            )}
-                                        >
+                                    {ALL_CATEGORIES.map((category) => (
+                                        <Button key={category} onClick={() => handleCategoryChange(category)} variant={formData.categories.includes(category) ? 'default' : 'outline'} className={cn("rounded-full text-xs sm:text-sm py-1 px-3", formData.categories.includes(category) ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'border-gray-300 hover:bg-gray-100')}>
                                             {category}
                                         </Button>
                                     ))}
@@ -641,38 +532,17 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="campaignDescription" className="font-semibold text-gray-700">Campaign Description</Label>
-                                <Textarea
-                                    id="campaignDescription"
-                                    name="campaignDescription"
-                                    value={formData.campaignDescription}
-                                    onChange={handleInputChange}
-                                    placeholder="Describe your campaign goals and requirements..."
-                                    className={cn("mt-1 min-h-[120px]", errors.campaignDescription && 'border-red-500')}
-                                />
+                                <Textarea id="campaignDescription" name="campaignDescription" value={formData.campaignDescription} onChange={handleInputChange} placeholder="Describe your campaign goals and requirements..." className={cn("mt-1 min-h-[120px]", errors.campaignDescription && 'border-red-500')} />
                                 {errors.campaignDescription && <p className="text-red-500 text-sm mt-1">{errors.campaignDescription}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="deadline" className="font-semibold text-gray-700">Deadline</Label>
-                                <Input
-                                    id="deadline"
-                                    name="deadline"
-                                    type="date"
-                                    value={formData.deadline}
-                                    onChange={handleInputChange}
-                                    className={cn("mt-1", errors.deadline && 'border-red-500')}
-                                />
+                                <Input id="deadline" name="deadline" type="date" value={formData.deadline} onChange={handleInputChange} className={cn("mt-1", errors.deadline && 'border-red-500')} />
                                 {errors.deadline && <p className="text-red-500 text-sm mt-1">{errors.deadline}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="demoVideoUrl" className="font-semibold text-gray-700">Demo Video URL (Optional)</Label>
-                                <Input
-                                    id="demoVideoUrl"
-                                    name="demoVideoUrl"
-                                    value={formData.demoVideoUrl}
-                                    onChange={handleInputChange}
-                                    placeholder="Link to a demo video (e.g., YouTube)"
-                                    className="mt-1"
-                                />
+                                <Input id="demoVideoUrl" name="demoVideoUrl" value={formData.demoVideoUrl} onChange={handleInputChange} placeholder="Link to a demo video (e.g., YouTube)" className="mt-1" />
                             </div>
                         </div>
                     </>
@@ -684,114 +554,48 @@ const CampaignCreationPage = () => {
                         <div className="space-y-4">
                             <div>
                                 <Label htmlFor="ownerFullName" className="font-semibold text-gray-700">Official Full Name</Label>
-                                <Input
-                                    id="ownerFullName"
-                                    name="ownerFullName"
-                                    value={formData.ownerFullName}
-                                    onChange={handleInputChange}
-                                    placeholder="Your full name"
-                                    className={cn("mt-1", errors.ownerFullName && 'border-red-500')}
-                                />
+                                <Input id="ownerFullName" name="ownerFullName" value={formData.ownerFullName} onChange={handleInputChange} placeholder="Your full name" className={cn("mt-1", errors.ownerFullName && 'border-red-500')} />
                                 {errors.ownerFullName && <p className="text-red-500 text-sm mt-1">{errors.ownerFullName}</p>}
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <Label htmlFor="contactNumber" className="font-semibold text-gray-700">Contact Number</Label>
-                                    <Input
-                                        id="contactNumber"
-                                        name="contactNumber"
-                                        type="tel"
-                                        value={formData.contactNumber}
-                                        onChange={handleInputChange}
-                                        placeholder="+91 9876543210"
-                                        className={cn("mt-1", errors.contactNumber && 'border-red-500')}
-                                    />
+                                    <Input id="contactNumber" name="contactNumber" type="tel" value={formData.contactNumber} onChange={handleInputChange} placeholder="+91 9876543210" className={cn("mt-1", errors.contactNumber && 'border-red-500')} />
                                     {errors.contactNumber && <p className="text-red-500 text-sm mt-1">{errors.contactNumber}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="whatsappContactNumber" className="font-semibold text-gray-700">WhatsApp Number (Optional)</Label>
-                                    <Input
-                                        id="whatsappContactNumber"
-                                        name="whatsappContactNumber"
-                                        type="tel"
-                                        value={formData.whatsappContactNumber}
-                                        onChange={handleInputChange}
-                                        placeholder="If different from contact no."
-                                        className="mt-1"
-                                    />
+                                    <Input id="whatsappContactNumber" name="whatsappContactNumber" type="tel" value={formData.whatsappContactNumber} onChange={handleInputChange} placeholder="If different from contact no." className="mt-1" />
                                 </div>
                             </div>
                             <div>
                                 <Label htmlFor="ownerEmailAddress" className="font-semibold text-gray-700">Email Address</Label>
-                                <Input
-                                    id="ownerEmailAddress"
-                                    name="ownerEmailAddress"
-                                    type="email"
-                                    value={formData.ownerEmailAddress}
-                                    onChange={handleInputChange}
-                                    placeholder="your.email@example.com"
-                                    className={cn("mt-1", errors.ownerEmailAddress && 'border-red-500')}
-                                />
+                                <Input id="ownerEmailAddress" name="ownerEmailAddress" type="email" value={formData.ownerEmailAddress} onChange={handleInputChange} placeholder="your.email@example.com" className={cn("mt-1", errors.ownerEmailAddress && 'border-red-500')} />
                                 {errors.ownerEmailAddress && <p className="text-red-500 text-sm mt-1">{errors.ownerEmailAddress}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="brandName" className="font-semibold text-gray-700">Brand Name (Optional)</Label>
-                                <Input
-                                    id="brandName"
-                                    name="brandName"
-                                    value={formData.brandName}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g., My Awesome Brand"
-                                    className="mt-1"
-                                />
+                                <Input id="brandName" name="brandName" value={formData.brandName} onChange={handleInputChange} placeholder="e.g., My Awesome Brand" className="mt-1" />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
                                     <Label htmlFor="ownerCity" className="font-semibold text-gray-700">City</Label>
-                                    <Input
-                                        id="ownerCity"
-                                        name="ownerCity"
-                                        value={formData.ownerCity}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., Bangalore"
-                                        className={cn("mt-1", errors.ownerCity && 'border-red-500')}
-                                    />
+                                    <Input id="ownerCity" name="ownerCity" value={formData.ownerCity} onChange={handleInputChange} placeholder="e.g., Bangalore" className={cn("mt-1", errors.ownerCity && 'border-red-500')} />
                                     {errors.ownerCity && <p className="text-red-500 text-sm mt-1">{errors.ownerCity}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerDistrict" className="font-semibold text-gray-700">District</Label>
-                                    <Input
-                                        id="ownerDistrict"
-                                        name="ownerDistrict"
-                                        value={formData.ownerDistrict}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., Bangalore Urban"
-                                        className={cn("mt-1", errors.ownerDistrict && 'border-red-500')}
-                                    />
+                                    <Input id="ownerDistrict" name="ownerDistrict" value={formData.ownerDistrict} onChange={handleInputChange} placeholder="e.g., Bangalore Urban" className={cn("mt-1", errors.ownerDistrict && 'border-red-500')} />
                                     {errors.ownerDistrict && <p className="text-red-500 text-sm mt-1">{errors.ownerDistrict}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerState" className="font-semibold text-gray-700">State</Label>
-                                    <Input
-                                        id="ownerState"
-                                        name="ownerState"
-                                        value={formData.ownerState}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., Karnataka"
-                                        className={cn("mt-1", errors.ownerState && 'border-red-500')}
-                                    />
+                                    <Input id="ownerState" name="ownerState" value={formData.ownerState} onChange={handleInputChange} placeholder="e.g., Karnataka" className={cn("mt-1", errors.ownerState && 'border-red-500')} />
                                     {errors.ownerState && <p className="text-red-500 text-sm mt-1">{errors.ownerState}</p>}
                                 </div>
                                 <div>
                                     <Label htmlFor="ownerCountry" className="font-semibold text-gray-700">Country</Label>
-                                    <Input
-                                        id="ownerCountry"
-                                        name="ownerCountry"
-                                        value={formData.ownerCountry}
-                                        onChange={handleInputChange}
-                                        placeholder="e.g., India"
-                                        className={cn("mt-1", errors.ownerCountry && 'border-red-500')}
-                                    />
+                                    <Input id="ownerCountry" name="ownerCountry" value={formData.ownerCountry} onChange={handleInputChange} placeholder="e.g., India" className={cn("mt-1", errors.ownerCountry && 'border-red-500')} />
                                     {errors.ownerCountry && <p className="text-red-500 text-sm mt-1">{errors.ownerCountry}</p>}
                                 </div>
                             </div>
@@ -848,9 +652,9 @@ const CampaignCreationPage = () => {
                                         <p className="text-lg font-bold text-gray-900">Total Payable</p>
                                         <p className="text-xl sm:text-2xl font-extrabold text-purple-700">₹{Math.round(totalAmount).toLocaleString('en-IN')}</p>
                                     </div>
-                                    <Button onClick={handlePayment} disabled={isSubmitting || !user} className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4">
+                                    <Button onClick={handlePayment} disabled={isSubmitting || !user || !isCashfreeReady} className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4">
                                         {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-5 w-5" />}
-                                        Pay Securely
+                                        {isCashfreeReady ? 'Pay Securely' : 'Loading Gateway...'}
                                     </Button>
                                     {!user && <p className="text-xs text-red-500 text-center mt-2">Please log in to complete payment.</p>}
                                 </div>
@@ -861,7 +665,7 @@ const CampaignCreationPage = () => {
             case 6:
                 return (
                     <div className="text-center py-8 sm:py-10">
-                        {paymentStatus === 'success' ? (
+                        {paymentStatus === 'success' || paymentStatus === 'processing' ? (
                             <>
                                 <CheckCircle className="h-16 w-16 sm:h-20 sm:w-20 text-green-500 mx-auto animate-pulse" />
                                 <h3 className="text-2xl sm:text-3xl font-bold text-green-600 mt-4">Payment Successful!</h3>
@@ -894,13 +698,13 @@ const CampaignCreationPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
+            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsCashfreeReady(true)} strategy="lazyOnload" />
             <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
-                {/* Added pb-20 to ensure content is not hidden behind a potential bottom navbar */}
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">
                         Launch Your Next Campaign
                     </h1>
-                    <p className="text-center text-gray-500 mb-6 sm:mb-8">Follow the steps below to get your campaign's live.</p>
+                    <p className="text-center text-gray-500 mb-6 sm:mb-8">Follow the steps below to get your campaign live.</p>
 
                     <div className="flex justify-between items-start mb-6 sm:mb-8 relative">
                         <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 transform -translate-y-1/2">
@@ -922,16 +726,16 @@ const CampaignCreationPage = () => {
                         {renderStep()}
                     </div>
 
-                    {currentStep < steps.length - 1 && ( // Show navigation if not on the last (Confirmation) step
+                    {currentStep < steps.length - 1 && (
                         <div className="flex justify-between mt-6 pt-4 border-t">
                             <Button onClick={prevStep} variant="outline" className="px-3 sm:px-4 py-2 text-sm sm:text-base" disabled={currentStep === 0}>
                                 <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" /> Back
                             </Button>
-                            {currentStep < steps.length - 2 ? ( // Regular Next button
+                            {currentStep < steps.length - 2 ? (
                                 <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700">
                                     Next <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>
-                            ) : ( // Review & Pay button on the step before Confirmation
+                            ) : (
                                 <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700">
                                     Review & Pay <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>

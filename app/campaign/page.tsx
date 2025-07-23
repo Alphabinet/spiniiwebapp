@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-    Loader2, Instagram, Facebook, Youtube, Users, DollarSign, Calendar, BarChart2,
+    Loader2, Instagram, Facebook, Youtube, Users, IndianRupee, Calendar, BarChart2,
     User, Search, X as XIcon, CheckCircle, LogIn, PartyPopper, Hash, MapPin, Cake,
     Sparkles, FileText, PlusCircle, ChevronDown, ChevronUp, ExternalLink, XCircle, Send, Lock
 } from 'lucide-react';
@@ -354,13 +354,9 @@ export default function CampaignPage() {
     }
 
     return (
-        <div className="min-h-screen p-4 bg-gradient-to-b from-violet-50 to-white sm:p-6 lg:p-8">
+        <div className="min-h-screen p-4 bg-purple-50 sm:p-6 lg:p-8">
             <div className="max-w-screen-xl mx-auto pb-20">
                 <div className="flex flex-col items-center justify-between gap-4 mb-8 md:flex-row">
-                    <div className="text-center md:text-left">
-                        <h1 className="text-4xl font-bold text-gray-900 md:text-5xl">Discover Campaigns</h1>
-                        <p className="mt-2 text-lg text-gray-600">Connect with brands that match your audience</p>
-                    </div>
                     <div className="flex gap-3">
                         <Button
                             className="flex items-center gap-2 text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
@@ -433,11 +429,11 @@ export default function CampaignPage() {
                             <div><h3 className="flex items-center text-lg font-semibold"><Sparkles className="w-5 h-5 mr-2 text-violet-500" />Requirements</h3><ul className="mt-3 space-y-2 text-gray-600"><li className="flex items-start"><BarChart2 className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Min. Followers: {selectedCampaign.minFollowers.toLocaleString()}</li><li className="flex items-start"><Cake className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Age: {selectedCampaign.minAge}-{selectedCampaign.maxAge} years</li><li className="flex items-start"><Users className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Gender: {selectedCampaign.gender}</li><li className="flex items-start"><MapPin className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" />Location: {selectedCampaign.location}</li><li className="flex items-start"><Hash className="flex-shrink-0 w-5 h-5 mr-2 mt-0.5 text-violet-500" /><p className="text-sm text-gray-600">{selectedCampaign.creatorCategory}</p></li></ul></div>
                         </div>
                         <div className="p-4 mt-6 bg-violet-50 rounded-xl">
-                            <h3 className="flex items-center text-lg font-semibold"><DollarSign className="w-5 h-5 mr-2 text-violet-500" />Budget & Deliverables</h3>
+                            <h3 className="flex items-center text-lg font-semibold"><IndianRupee className="w-5 h-5 mr-2 text-violet-500" />Budget & Deliverables</h3>
                             <div className="grid grid-cols-2 gap-4 mt-3">
                                 <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Total Creators</p><p className="text-xl font-bold">{selectedCampaign.numInfluencers}</p></div>
-                                <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Per Creator</p><p className="text-xl font-bold text-violet-600">₹{selectedCampaign.perCreatorBudget.toLocaleString()}</p></div>
-                                <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Total Budget</p><p className="text-xl font-bold">₹{selectedCampaign.budgetTotal.toLocaleString()}</p></div>
+                                <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Per Creator</p><p className="text-xl font-bold text-violet-600">₹{selectedCampaign.perCreatorBudget.toLocaleString('en-IN')}</p></div>
+                                <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Total Budget</p><p className="text-xl font-bold">₹{selectedCampaign.budgetTotal.toLocaleString('en-IN')}</p></div>
                                 <div className="p-3 bg-white rounded-lg"><p className="text-sm text-gray-500">Deadline</p><p className="text-lg font-bold">{format(new Date(selectedCampaign.deadline), 'MMM dd, yy')}</p></div>
                             </div>
                             <div className="mt-4">
@@ -450,7 +446,27 @@ export default function CampaignPage() {
                             </div>
                         </div>
                         <div className="mt-6">
-                            {!user ? (<Button className="w-full bg-violet-600 hover:bg-violet-700" onClick={() => router.push('/signin')}><LogIn className="w-4 h-4 mr-2" />Login to Apply</Button>) : userProfile?.accountType !== 'creator' ? (<Button className="w-full" disabled><XCircle className="w-4 h-4 mr-2" />Creators Only</Button>) : appliedCampaignIds.has(selectedCampaign.id) ? (<Button variant="destructive" className="w-full" onClick={() => handleUnapply(selectedCampaign.id)} disabled={isApplying}>{isApplying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XIcon className="w-4 h-4 mr-2" />}Withdraw</Button>) : (<Button className="w-full text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700" onClick={() => initiateApplication(selectedCampaign.id)} disabled={isApplying}>{isApplying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}Apply for Campaign</Button>)}
+                            {!user ? (
+                                <Button className="w-full bg-violet-600 hover:bg-violet-700" onClick={() => router.push('/signin')}>
+                                    <LogIn className="w-4 h-4 mr-2" />Login to Apply
+                                </Button>
+                            ) : userProfile?.accountType !== 'creator' ? (
+                                <Button className="w-full" disabled>
+                                    <XCircle className="w-4 h-4 mr-2" />Creators Only
+                                </Button>
+                            ) : new Date(selectedCampaign.deadline).getTime() < Date.now() ? (
+                                <Button className="w-full" disabled>
+                                    <XCircle className="w-4 h-4 mr-2" />Expired
+                                </Button>
+                            ) : appliedCampaignIds.has(selectedCampaign.id) ? (
+                                <Button variant="destructive" className="w-full" onClick={() => handleUnapply(selectedCampaign.id)} disabled={isApplying}>
+                                    {isApplying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XIcon className="w-4 h-4 mr-2" />}Withdraw
+                                </Button>
+                            ) : (
+                                <Button className="w-full text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700" onClick={() => initiateApplication(selectedCampaign.id)} disabled={isApplying}>
+                                    {isApplying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}Apply for Campaign
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -521,6 +537,7 @@ const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile
     };
 
     const daysLeft = Math.ceil((new Date(campaign.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const isExpired = daysLeft <= 0;
 
     return (
         <div className="flex flex-col p-6 overflow-hidden transition bg-white border rounded-xl shadow-sm hover:shadow-lg group">
@@ -540,7 +557,7 @@ const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile
                 </div>
                 <div className="space-y-3 text-sm mt-4">
                     <div className="flex items-center justify-between"><span className="flex items-center text-gray-500"><Users className="w-4 h-4 mr-2 text-violet-500" />Creators</span><span className="font-semibold text-gray-800">{campaign.numInfluencers}</span></div>
-                    <div className="flex items-center justify-between"><span className="flex items-center text-gray-500"><DollarSign className="w-4 h-4 mr-2 text-violet-500" />Per Creator</span><span className="font-semibold text-gray-800">₹{campaign.perCreatorBudget.toLocaleString('en-IN')}</span></div>
+                    <div className="flex items-center justify-between"><span className="flex items-center text-gray-500"><IndianRupee className="w-4 h-4 mr-2 text-violet-500" />Per Creator</span><span className="font-semibold text-gray-800">₹{campaign.perCreatorBudget.toLocaleString('en-IN')}</span></div>
                     <div className="flex items-center justify-between"><span className="flex items-center text-gray-500"><BarChart2 className="w-4 h-4 mr-2 text-violet-500" />Followers</span><span className="font-semibold text-gray-800">{campaign.minFollowers.toLocaleString('en-IN')}+</span></div>
                     <div className="flex items-center justify-between"><span className="flex items-center text-gray-500"><Calendar className="w-4 h-4 mr-2 text-violet-500" />Deadline</span><div className="text-right"><span className="font-semibold text-gray-800">{format(new Date(campaign.deadline), 'MMM dd, yy')}</span><span className={`block text-xs ${daysLeft <= 3 ? 'text-red-500' : 'text-gray-500'}`}>{daysLeft > 0 ? `${daysLeft} days left` : 'Expired'}</span></div></div>
                 </div>
@@ -563,6 +580,10 @@ const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile
                 ) : isApplied ? (
                     <Button variant="destructive" className="w-full" onClick={onUnapply} disabled={isProcessing}>
                         {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XIcon className="w-4 h-4 mr-2" />}Withdraw
+                    </Button>
+                ) : isExpired ? (
+                    <Button className="w-full" disabled>
+                        <XCircle className="w-4 h-4 mr-2" />Expired
                     </Button>
                 ) : (
                     <Button className="w-full text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700" onClick={onApply} disabled={isProcessing}>

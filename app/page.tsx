@@ -1,10 +1,11 @@
+// app/page.tsx
 "use client";
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { useRouter } from "next/navigation"; // Keep useRouter for navigation
+import { useRouter } from "next/navigation";
 
 // UI and Icon Imports
 import {
@@ -23,7 +24,6 @@ import {
   Palette,
   Code, // Import the Code icon for Tech
   Film,
-  DollarSign, // This icon is still imported, but will not be used for "Zero Hidden Charges"
   ShieldCheck,
   Target,
   Lock,
@@ -66,7 +66,7 @@ type Creator = {
     name: string;
     price: string;
   };
-  status: "pending" | "approved" | "rejected" | string;
+  subscriptionStatus: "active" | "inactive" | "pending" | string; // Updated to include subscriptionStatus
 };
 
 type StepItem = {
@@ -240,11 +240,15 @@ export default function HomePage() {
 
   // --- DATA FETCHING ---
   useEffect(() => {
-    const fetchApprovedCreatorsAndCategories = async () => {
+    const fetchActiveCreatorsAndCategories = async () => {
       try {
         setLoadingCreators(true);
         const creatorsCollectionRef = collection(db, "creatorApplications");
-        const q = query(creatorsCollectionRef, where("status", "==", "approved"));
+        // MODIFIED: Query for creators with an 'active' subscription status
+        const q = query(
+          creatorsCollectionRef,
+          where("subscriptionStatus", "==", "active")
+        );
         const querySnapshot = await getDocs(q);
 
         const fetchedCreatorData: Creator[] = [];
@@ -291,7 +295,7 @@ export default function HomePage() {
             verified: true,
             completedProjects: Math.floor(Math.random() * 50) + 1,
             featuredService,
-            status: data.status || "pending",
+            subscriptionStatus: data.subscriptionStatus || "inactive",
           });
         });
 
@@ -304,7 +308,7 @@ export default function HomePage() {
         setLoadingCreators(false);
       }
     };
-    fetchApprovedCreatorsAndCategories();
+    fetchActiveCreatorsAndCategories();
   }, []);
 
   useEffect(() => {
@@ -553,8 +557,9 @@ export default function HomePage() {
       prevSlide: () => void;
       goToSlide: (index: number) => void;
     },
-    onTouchStart: (e: React.TouchEvent<HTMLDivElement>) => void,
-    onTouchEnd: (e: React.TouchEvent<HTMLDivElement>) => void
+    // Parameters for the touch handlers
+    onTouchStartProp: (e: React.TouchEvent<HTMLDivElement>) => void,
+    onTouchEndProp: (e: React.TouchEvent<HTMLDivElement>) => void
   ) => {
     if (loadingCreators)
       return <div className="text-center py-10">Loading creators...</div>;
@@ -563,7 +568,7 @@ export default function HomePage() {
     if (creatorsToRender.length === 0)
       return (
         <div className="text-center py-10 text-gray-500">
-          No approved creators found.
+          No creators found with an active subscription.
         </div>
       );
 
@@ -589,8 +594,8 @@ export default function HomePage() {
         )}
         <div
           className="overflow-hidden rounded-lg cursor-grab active:cursor-grabbing"
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
+          onTouchStart={onTouchStartProp} // Use the passed prop here
+          onTouchEnd={onTouchEndProp}     // Use the passed prop here
         >
           <motion.div
             className="flex"
@@ -645,7 +650,6 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* === MODIFIED SECTION: Changed from $ to ₹ === */}
                     <div className="flex items-center justify-between w-full mt-auto bg-white/50 rounded-xl p-2">
                       <div className="text-left">
                         <p className="text-sm font-semibold text-purple-900">
@@ -656,7 +660,6 @@ export default function HomePage() {
                         </p>
                       </div>
 
-                      {/* Conditionally render Buy or Sign In button */}
                       {user ? (
                         <Link href={`/creator/${creator.id}`} passHref>
                           <Button
@@ -678,7 +681,6 @@ export default function HomePage() {
                         </Link>
                       )}
                     </div>
-                    {/* === END OF MODIFIED SECTION === */}
                   </CardContent>
                 </Card>
               </motion.div>
@@ -707,7 +709,7 @@ export default function HomePage() {
     {
       title: "Zero Hidden Charges",
       text: "Transparent pricing and earnings — 100% clarity for both creators and brands.",
-      icon: "₹", // Replaced with "Rs" string
+      icon: "₹",
     },
     {
       title: "Verified & Trustworthy Network",
@@ -774,7 +776,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-purple-50">
       {/* Hero Section */}
       <section id="homepage-search-section">
-        <div className="container mx-auto px-4 py-2">
+        <div className="container mx-auto px-4 py-4">
           <div className="max-w-4xl mx-auto">
             <div className="relative flex items-center w-full bg-white rounded-2xl shadow-lg border border-gray-400 focus-within:ring-4 focus-within:ring-purple-200 transition-all duration-300">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-8 text-gray-500 z-10" />
@@ -782,7 +784,6 @@ export default function HomePage() {
                 ref={homepageSearchInputRef}
                 id="homepage-search-input"
                 placeholder={`Search for Creator`}
-                // Changed to rounded-l-2xl for the left side, and removed right-side rounding
                 className="w-full border-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none text-sm sm:text-base py-3 pl-12 pr-28 sm:pr-32 rounded-l-2xl placeholder:text-gray-400 bg-transparent"
                 aria-label="Search creators, services, and campaigns"
                 value={searchQuery}
@@ -792,7 +793,6 @@ export default function HomePage() {
                 onKeyPress={(e) => e.key === "Enter" && handleSearchSubmit()}
               />
               <Button
-                // Button already has rounded-r-2xl, which is correct for alignment
                 className="absolute right-0 top-0 bottom-0 rounded-r-2xl px-4 sm:px-6 bg-purple-700 text-white font-semibold hover:bg-purple-700 transition-colors duration-300 text-sm"
                 onClick={handleSearchSubmit}
               >
@@ -856,8 +856,8 @@ export default function HomePage() {
                           resetBannerInterval();
                         }}
                         className={`w-2 h-2 sm:w-3 sm:h-3 rounded-full transition-all ${index === currentBanner
-                          ? "bg-white scale-125"
-                          : "bg-white/50"
+                            ? "bg-white scale-125"
+                            : "bg-white/50"
                           }`}
                       />
                     ))}
@@ -896,14 +896,13 @@ export default function HomePage() {
               {availableCategories.map((category) => (
                 <Button
                   key={category}
-                  // Ensure the variant and className handle all states for consistent color
                   variant={selectedCategory === category ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedCategory(category)}
                   className={`rounded-full px-4 py-1 transition-all duration-200 whitespace-nowrap
-              ${selectedCategory === category
-                      ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600" // Keep consistent purple for active/focus
-                      : "border border-gray-300 text-gray-700 hover:bg-gray-100" // Default outline style
+                  ${selectedCategory === category
+                      ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600"
+                      : "border border-gray-300 text-gray-700 hover:bg-gray-100"
                     }`}
                 >
                   {category}
@@ -916,8 +915,8 @@ export default function HomePage() {
             currentCreatorSlide,
             totalCreatorSlides,
             mainCreatorSlideHandlers,
-            handleTouchStart,
-            createTouchEndHandler(mainCreatorSlideHandlers)
+            handleTouchStart, // Pass the actual function
+            createTouchEndHandler(mainCreatorSlideHandlers) // Pass the created function
           )}
         </div>
       </section>
@@ -943,8 +942,8 @@ export default function HomePage() {
             currentComedySlide,
             totalComedySlides,
             comedySlideHandlers,
-            handleTouchStart,
-            createTouchEndHandler(comedySlideHandlers)
+            handleTouchStart, // Pass the actual function
+            createTouchEndHandler(comedySlideHandlers) // Pass the created function
           )}
         </div>
       </section>
@@ -969,8 +968,8 @@ export default function HomePage() {
               currentEntertainmentSlide,
               totalEntertainmentSlides,
               entertainmentSlideHandlers,
-              handleTouchStart,
-              createTouchEndHandler(entertainmentSlideHandlers)
+              handleTouchStart, // Pass the actual function
+              createTouchEndHandler(entertainmentSlideHandlers) // Pass the created function
             )}
           </div>
         </section>
@@ -996,8 +995,8 @@ export default function HomePage() {
               currentLifestyleSlide,
               totalLifestyleSlides,
               lifestyleSlideHandlers,
-              handleTouchStart,
-              createTouchEndHandler(lifestyleSlideHandlers)
+              handleTouchStart, // Pass the actual function
+              createTouchEndHandler(lifestyleSlideHandlers) // Pass the created function
             )}
           </div>
         </section>
@@ -1023,8 +1022,8 @@ export default function HomePage() {
               currentBeautySlide,
               totalBeautySlides,
               beautySlideHandlers,
-              handleTouchStart,
-              createTouchEndHandler(beautySlideHandlers)
+              handleTouchStart, // Pass the actual function
+              createTouchEndHandler(beautySlideHandlers) // Pass the created function
             )}
           </div>
         </section>
@@ -1050,8 +1049,8 @@ export default function HomePage() {
               currentTechSlide,
               totalTechSlides,
               techSlideHandlers,
-              handleTouchStart,
-              createTouchEndHandler(techSlideHandlers)
+              handleTouchStart, // Pass the actual function
+              createTouchEndHandler(techSlideHandlers) // Pass the created function
             )}
           </div>
         </section>
@@ -1068,7 +1067,7 @@ export default function HomePage() {
 
           {/* Section: For Creators */}
           <div className="mb-10">
-            <h3 className="text-2xl sm:text-3xl font-bold text-center bg-purple-100 inline:block rounded-3xl text-blue-800 mb-10">
+            <h3 className="text-2xl sm:text-3xl font-bold text-center inline:block rounded-3xl text-blue-800 mb-10">
               For Creator
             </h3>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 ">
@@ -1077,7 +1076,6 @@ export default function HomePage() {
                   key={index}
                   className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:bg-purple-200/60 hover:shadow-md transition-all duration-300"
                 >
-                  {/* Conditional rendering for icon or "Rs" text */}
                   {typeof benefit.icon === "string" ? (
                     <div className="h-8 w-8 text-purple-600 mb-3 flex items-center justify-center font-bold text-xl">
                       {benefit.icon}
@@ -1096,7 +1094,7 @@ export default function HomePage() {
 
           {/* Section: For Brands */}
           <div>
-            <h3 className="text-2xl sm:text-3xl font-bold text-center bg-purple-100 inline:block rounded-3xl text-blue-800 mb-10">
+            <h3 className="text-2xl sm:text-3xl font-bold text-center inline:block rounded-3xl text-blue-800 mb-10">
               For Brands
             </h3>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -1105,7 +1103,6 @@ export default function HomePage() {
                   key={index}
                   className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:bg-purple-200/60 hover:shadow-md transition-all duration-300"
                 >
-                  {/* For brands, all icons are components */}
                   <benefit.icon className="h-8 w-8 text-purple-600 mb-3" />
                   <h4 className="text-lg font-semibold mb-2 text-gray-800">
                     {benefit.title}
@@ -1198,15 +1195,12 @@ export default function HomePage() {
       </section>
 
       {/* Trusted Clients */}
-      <section className="py-10 bg-white">
+      <section className="py-10">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-purple-900 mb-4">
               Our Trusted Clients
             </h2>
-            <p className="text-base sm:text-lg text-gray-600 max-w-3xl mx-auto">
-              Collaborations with top brands that trust our platform
-            </p>
           </div>
 
           {loadingClients ? (

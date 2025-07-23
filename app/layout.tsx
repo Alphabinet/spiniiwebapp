@@ -1,114 +1,122 @@
-import type React from "react";
+// app/layout.tsx
+
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Import your Navigation and Footer components
+// Import your Navigation component
 import Navigation from "@/app/components/Navigation";
-// Import SessionProvider wrapper
+
+// Import the combined Providers wrapper
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
-// --- Enhanced Metadata for SEO and Alphabinet Attribution (without Twitter tags) ---
+// --- Enhanced Metadata for SEO and Alphabinet Attribution ---
 export const metadata: Metadata = {
-  // 1. Primary SEO Title
+  // 1. Primary SEO Title: Clear, concise, and keyword-rich
   title: "Snaapii - Influencer Marketing Platform for Brands & Creators",
 
-  // 2. Comprehensive SEO Description
+  // 2. Comprehensive SEO Description: Engaging and informative, includes key services
   description:
-    "Connect brands with verified digital creators for influencer marketing, collaborations, paid campaigns, and content services on Snaapii",
+    "Snaapii connects brands with verified digital creators for powerful influencer marketing campaigns. Discover seamless collaborations, paid partnerships, and expert content services on our leading platform.",
 
-  // 3. Expanded Keywords for better search visibility
+  // 3. Expanded Keywords for better search visibility: Broader and more specific terms
   keywords: [
     "Snaapii",
-    "digital marketing",
-    "influencer marketing",
-    "brand collaboration",
-    "content creation",
-    "social media marketing",
-    "creator platform",
-    "brand deals",
+    "influencer marketing platform",
+    "brand creator collaboration",
+    "digital marketing India",
+    "content creation platform",
+    "social media influencer",
+    "paid campaigns",
+    "creator economy",
+    "micro-influencers",
+    "nano-influencers",
+    "brand partnerships",
+    "marketing strategy",
+    "online advertising",
+    "creator monetization",
+    "influencer discovery",
+    "campaign management",
     "verified creators",
-    "marketing campaigns",
-    "digital creators",
-    "influencers",
+    "influencer network",
     "India", // Regional SEO
+    "marketing platform", // Broader term
   ],
 
   // 4. Application Name
   applicationName: "Snaapii",
 
-  // 5. Canonical URL to prevent duplicate content issues
+  // 5. Canonical URL to prevent duplicate content issues: Essential for SEO
   alternates: {
-    canonical: 'https://www.snaapii.com/',
-    // You can add other alternates like RSS feeds here if applicable
+    canonical: "https://www.snaapii.com/",
+    // Add other alternates like RSS feeds or language-specific URLs if applicable
+    // eg: languages: { 'en-US': 'https://www.snaapii.com/en-US', },
   },
 
-  // 6. Open Graph Meta Tags (for social media sharing - Facebook, LinkedIn etc.)
+  // 6. Open Graph Meta Tags (for social media sharing - Facebook, LinkedIn, etc.)
   openGraph: {
     title: "Snaapii - Connect Creators with Brands | Influencer Marketing Platform",
-    description: "Snaapii is the premier platform connecting verified digital creators with top brands for impactful marketing campaigns. Discover professional influencer marketing, seamless brand collaborations, and innovative content creation services. Empowering creators, boosting brands.",
+    description:
+      "Snaapii is the premier platform connecting verified digital creators with top brands for impactful marketing campaigns. Discover professional influencer marketing, seamless brand collaborations, and innovative content creation services. Empowering creators, boosting brands.",
     url: "https://www.snaapii.com/",
     siteName: "Snaapii",
     images: [
       {
-        url: "https://www.snaapii.com/og_image.jpg", // Recommended: Create a specific OG image for best display
+        url: "https://www.snaapii.com/og_image.jpg", // Recommended: Create a specific OG image for best display (1200x630px ideal)
         width: 1200,
         height: 630,
-        alt: "Snaapii Platform for Creators and Brands",
+        alt: "Snaapii - Influencer Marketing Platform for Brands and Digital Creators",
       },
-      // You can add more image sizes or variations here
+      // You can add more image sizes or variations here if needed for different platforms
     ],
     locale: "en_US",
-    type: "website", // Or 'article' for blog posts, etc.
+    type: "website", // Use 'website' for most homepages, 'article' for blog posts, etc.
   },
 
-  // --- Favicon and Web Manifest Configuration (UPDATED) ---
+  // --- Favicon and Web Manifest Configuration ---
   icons: [
     {
-      rel: 'apple-touch-icon',
-      sizes: '180x180',
-      url: '/favicon_io/apple-touch-icon.png',
+      rel: "apple-touch-icon",
+      sizes: "180x180",
+      url: "/favicon_io/apple-touch-icon.png",
     },
     {
-      rel: 'icon',
-      type: 'image/png',
-      sizes: '32x32',
-      url: '/favicon_io/favicon-32x32.png',
+      rel: "icon",
+      type: "image/png",
+      sizes: "32x32",
+      url: "/favicon_io/favicon-32x32.png",
     },
     {
-      rel: 'icon',
-      type: 'image/png',
-      sizes: '16x16',
-      url: '/favicon_io/favicon-16x16.png',
+      rel: "icon",
+      type: "image/png",
+      sizes: "16x16",
+      url: "/favicon_io/favicon-16x16.png",
     },
     {
-      rel: 'mask-icon', // For Safari pinned tabs
-      url: '/favicon_io/safari-pinned-tab.svg', // Assuming you might have this, common from generators
-      color: '#4B0082', // Set to your theme color or brand color
+      rel: "mask-icon", // For Safari pinned tabs
+      url: "/favicon_io/safari-pinned-tab.svg",
+      color: "#4B0082", // Set to your brand's primary color
     },
-    // The standard favicon.ico is often still useful, even if others are present
     {
-      rel: 'shortcut icon',
-      url: '/favicon_io/favicon.ico', // Often combines multiple sizes
+      rel: "shortcut icon", // Fallback for older browsers and general use
+      url: "/favicon_io/favicon.ico",
     },
   ],
-  // Link to the Web Manifest
-  manifest: '/favicon_io/site.webmanifest',
+  manifest: "/favicon_io/site.webmanifest", // Link to the Web Manifest for PWA features
 
-
-  // 7. Robots Meta Tag (guide search engine crawlers)
+  // 7. Robots Meta Tag (guide search engine crawlers): Explicitly allow indexing and following
   robots: {
     index: true,
     follow: true,
-    nocache: false,
+    nocache: false, // Generally good to allow caching
     googleBot: {
       index: true,
       follow: true,
       noimageindex: false,
-      'max-video-preview': -1,
-      'max-snippet': -1,
+      "max-video-preview": -1, // Allow full video previews
+      "max-snippet": -1, // Allow full text snippets
     },
   },
 
@@ -118,7 +126,7 @@ export const metadata: Metadata = {
   publisher: "Alphabinet", // Indicates who published the content/website (often the same as creator for a website)
 
   // Additional Meta Tags (optional but good practice)
-  colorScheme: "light", // Or "dark", "dark light"
+  colorScheme: "light dark", // Indicate support for both light and dark modes
   themeColor: "#4B0082", // A dominant color from your brand (e.g., a shade of purple)
 };
 
@@ -129,11 +137,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        {/* With Next.js 13+ App Router, the `metadata` export automatically
-            handles favicon and manifest links, so you usually don't need to add them here manually. */}
-      </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} pb-[60px] md:pb-0`}>
         <Providers>
           {/* Navigation Bar */}
           <Navigation />
