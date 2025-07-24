@@ -18,6 +18,7 @@ import {
 import Image from "next/image";
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import Script from 'next/script'; // <-- Re-added Script component
 
 // --- Type Definitions ---
 interface ApplicationData {
@@ -68,16 +69,20 @@ interface Activity {
     time: string;
 }
 
-// ===== Subscription Component (No Changes) =====
+// ===== Subscription Component (Reverted to SDK Method) =====
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
+    const [isSDKReady, setIsSDKReady] = useState(false); // <-- State for SDK readiness
 
     const plan = { name: "Creator Pro Monthly", amount: 1.00 };
     const isProfileApproved = creatorApplication?.status === 'approved';
 
     const handlePurchase = async () => {
-        // Perform client-side checks first
+        if (!isSDKReady) {
+            setMessage('Payment SDK is not ready yet. Please wait a moment.');
+            return;
+        }
         if (!userData?.fullName || userData.fullName.length < 2) {
             setMessage('Your full name is required. Please update your profile first.');
             return;
@@ -108,15 +113,20 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
             });
             const data = await response.json();
 
-            if (data.success && data.payment_link) {
-                window.location.href = data.payment_link;
+            if (data.success && data.payment_session_id) {
+                // Use the SDK to open the checkout modal
+                const cashfree = (window as any).Cashfree({ mode: process.env.NEXT_PUBLIC_CASHFREE_MODE === 'sandbox' ? 'sandbox' : 'production' });
+                cashfree.checkout({
+                    paymentSessionId: data.payment_session_id,
+                    redirectTarget: "_self"
+                });
             } else {
                 setMessage(`Error: ${data.message || 'Could not initiate payment.'}`);
-                setLoading(false);
             }
         } catch (error) {
             setMessage('An unexpected error occurred.');
             console.error("Subscription purchase error:", error);
+        } finally {
             setLoading(false);
         }
     };
@@ -128,86 +138,100 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
         return (
             <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
                  <div className="text-center">
-                     <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
-                     <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
-                 </div>
-                 <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50 flex-grow flex flex-col justify-center">
-                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                     </svg>
-                     <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
-                     <p className="text-gray-300 mt-2 text-sm">
-                         {creatorApplication?.status === 'pending'
-                             ? "Your application is currently under review. Once approved, you'll be able to subscribe."
-                             : "Please update your application based on our feedback to become eligible for a subscription."
-                         }
-                     </p>
-                 </div>
+                    <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
+                    <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
+                </div>
+                <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50 flex-grow flex flex-col justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
+                    <p className="text-gray-300 mt-2 text-sm">
+                        {creatorApplication?.status === 'pending'
+                            ? "Your application is currently under review. Once approved, you'll be able to subscribe."
+                            : "Please update your application based on our feedback to become eligible for a subscription."
+                        }
+                    </p>
+                </div>
             </div>
         );
     }
-   
+    
     return (
-        <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
-            {!isSubscribed && (
-                <div className="absolute top-0 right-0 h-24 w-24">
-                    <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
-                        OFF
-                    </div>
-                </div>
-            )}
-            <div className="text-center">
-                <p className={`font-semibold text-sm sm:text-base ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}>PREMIUM MEMBERSHIP</p>
-                <h3 className="text-xl sm:text-2xl font-bold mt-1">EXCLUSIVE ACCESS</h3>
-            </div>
-            {isSubscribed ? (
-                <div className="border border-green-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-green-900/50">
-                    <p className="text-3xl sm:text-4xl font-bold">Expires On:</p>
-                    <p className="text-2xl sm:text-3xl font-bold mt-1">
-                        {userData?.subscriptionExpiresAt ? new Date(userData.subscriptionExpiresAt.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
-                    </p>
-                </div>
-            ) : (
-                <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50">
-                    <p className="text-4xl sm:text-5xl font-bold text-white">₹{plan.amount} <span className="text-xl sm:text-2xl text-gray-400 line-through ml-2">₹999</span></p>
-                    <p className="text-gray-300 text-sm sm:text-base">per month</p>
-                </div>
-            )}
-            {!isSubscribed && (
-                <div className="text-center mb-6 sm:mb-8">
-                    <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
-                        LIMITED TIME OFFER
-                    </p>
-                </div>
-            )}
-            <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
-                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
-            </ul>
-            <button
-                onClick={handlePurchase}
-                disabled={loading || isSubscribed}
-                className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
-            >
-                {loading
-                    ? "Redirecting to payment..."
-                    : isSubscribed
-                    ? "Subscribed"
-                    : "Get Started"
+        <>
+            {/* Re-add the Script tag to load the SDK */}
+            <Script
+                src={process.env.NEXT_PUBLIC_CASHFREE_MODE === 'sandbox'
+                    ? "https://sdk.cashfree.com/js/v3/cashfree-sbox.sdk.min.js"
+                    : "https://sdk.cashfree.com/js/v3/cashfree.sdk.min.js"
                 }
-            </button>
-            {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
-            {isSubscribed && <p className="text-center mt-4 text-xs sm:text-sm text-green-100">Enjoy your premium benefits!</p>}
-            <p className={`text-xs text-center mt-4 ${isSubscribed ? 'text-green-200' : 'text-gray-400'}`}>
-                By {isSubscribed ? "being subscribed" : "subscribing"}, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
-            </p>
-        </div>
+                onLoad={() => setIsSDKReady(true)}
+                strategy="lazyOnload"
+            />
+            <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
+                {!isSubscribed && (
+                    <div className="absolute top-0 right-0 h-24 w-24">
+                        <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
+                            OFF
+                        </div>
+                    </div>
+                )}
+                <div className="text-center">
+                    <p className={`font-semibold text-sm sm:text-base ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}>PREMIUM MEMBERSHIP</p>
+                    <h3 className="text-xl sm:text-2xl font-bold mt-1">EXCLUSIVE ACCESS</h3>
+                </div>
+                {isSubscribed ? (
+                    <div className="border border-green-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-green-900/50">
+                        <p className="text-3xl sm:text-4xl font-bold">Expires On:</p>
+                        <p className="text-2xl sm:text-3xl font-bold mt-1">
+                            {userData?.subscriptionExpiresAt ? new Date(userData.subscriptionExpiresAt.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50">
+                        <p className="text-4xl sm:text-5xl font-bold text-white">₹{plan.amount} <span className="text-xl sm:text-2xl text-gray-400 line-through ml-2">₹999</span></p>
+                        <p className="text-gray-300 text-sm sm:text-base">per month</p>
+                    </div>
+                )}
+                {!isSubscribed && (
+                    <div className="text-center mb-6 sm:mb-8">
+                        <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
+                            LIMITED TIME OFFER
+                        </p>
+                    </div>
+                )}
+                <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
+                </ul>
+                <button
+                    onClick={handlePurchase}
+                    disabled={!isSDKReady || loading || isSubscribed}
+                    className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
+                >
+                    {!isSDKReady
+                        ? "Initializing Payment..."
+                        : loading
+                        ? "Processing..."
+                        : isSubscribed
+                        ? "Subscribed"
+                        : "Get Started"
+                    }
+                </button>
+                {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
+                {isSubscribed && <p className="text-center mt-4 text-xs sm:text-sm text-green-100">Enjoy your premium benefits!</p>}
+                <p className={`text-xs text-center mt-4 ${isSubscribed ? 'text-green-200' : 'text-gray-400'}`}>
+                    By {isSubscribed ? "being subscribed" : "subscribing"}, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
+                </p>
+            </div>
+        </>
     );
 }
+
 
 // ===== Success Modal Component (No Changes) =====
 function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
@@ -329,7 +353,6 @@ export function PersonalInformationForm({ user, userData, isMandatory }: { user:
                 userId: user.uid,
                 updatedAt: serverTimestamp(),
             };
-            // Set createdAt only if it's a new document
             if (!userData?.createdAt) {
                 dataToSave.createdAt = serverTimestamp();
             }
@@ -507,7 +530,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
                 await uploadBytes(imageRef, image);
                 imageUrl = await getDownloadURL(imageRef);
             }
-           
+            
             const dataToSend = {
                 ...formData,
                 profilePictureUrl: imageUrl,
@@ -1110,8 +1133,8 @@ function CreatorDashboard() {
                         className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         title="Dashboard"
                     >
-                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
-                         <span className="hidden sm:inline">Dashboard</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
+                        <span className="hidden sm:inline">Dashboard</span>
                     </button>
                     {/* Personal Profile Edit View */}
                     <button
@@ -1151,5 +1174,4 @@ function CreatorDashboard() {
                 </div>
             </div>
         </div>
-    );
-}
+    )

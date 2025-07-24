@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
                 customer_phone: userPhone,
             },
             order_meta: {
+                // This URL is where the user lands after payment completion/failure
                 return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?order_id={order_id}`,
             },
         };
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-version': '2022-09-01', // Use the version for Orders API
+                'x-api-version': '2022-09-01',
                 'x-client-id': appId,
                 'x-client-secret': secretKey,
             },
@@ -89,11 +90,11 @@ export async function POST(req: NextRequest) {
                 paymentSessionId: cfData.payment_session_id,
             });
 
+            // **THE FIX**: Return the payment_session_id for the SDK to use.
             return NextResponse.json({
                 success: true,
                 message: 'Payment session created.',
-                // **CRITICAL CHANGE**: Use the payment_url from the order for redirect
-                payment_link: cfData.order_meta.payment_url, 
+                payment_session_id: cfData.payment_session_id, 
             });
         } else {
             console.error("Cashfree order creation failed:", cfData);

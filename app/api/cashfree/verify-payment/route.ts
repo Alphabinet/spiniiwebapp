@@ -1,101 +1,117 @@
-// app/api/cashfree/verify-payment/route.ts
+// app/api/cashfree/subscribe/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase/admin'; 
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import { FieldValue } from 'firebase-admin/firestore';
+import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 
-// Helper function to find the creator application document ID for a given user
-async function getCreatorApplicationId(userId: string): Promise<string | null> {
-    if (!adminDb) return null;
-    const creatorAppsRef = adminDb.collection("creatorApplications");
-    const q = creatorAppsRef.where("userId", "==", userId).limit(1);
-    const querySnapshot = await q.get();
-    
-    if (!querySnapshot.empty) {
-        return querySnapshot.docs[0].id;
-    }
-    return null;
-}
+const subscribeSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  userName: z.string().min(2, "Full name must be at least 2 characters."),
+  userEmail: z.string().email("A valid email is required"),
+  userPhone: z.string().regex(/^[6-9]\d{9}$/, "A valid 10-digit Indian mobile number is required."),
+  plan: z.object({
+    name: z.string(),
+    amount: z.number().positive(),
+  }),
+});
 
 export async function POST(req: NextRequest) {
     if (!adminDb) {
-        console.error("CRITICAL: Firebase Admin SDK is not initialized in verify-payment route.");
+        console.error("CRITICAL: Firebase Admin SDK is not initialized.");
         return NextResponse.json({ success: false, message: 'Server configuration error.' }, { status: 500 });
     }
 
     try {
-        // --- FIX: Expect order_id, which matches the subscribe route ---
-        const { order_id } = await req.json();
-        if (!order_id) {
-            return NextResponse.json({ success: false, message: 'Order ID is required.' }, { status: 400 });
+        const token = req.headers.get('Authorization')?.split('Bearer ')[1];
+        if (!token) {
+            return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
         }
+        await adminAuth.verifyIdToken(token);
+        
+        const body = await req.json();
+        const validatedData = subscribeSchema.parse(body);
+
+        const { userId, userName, userEmail, userPhone, plan } = validatedData;
 
         const appId = process.env.CASHFREE_APP_ID;
         const secretKey = process.env.CASHFREE_SECRET_KEY;
         const apiUrl = process.env.CASHFREE_API_URL;
 
         if (!appId || !secretKey || !apiUrl) {
+            console.error("Cashfree environment variables not set!");
             return NextResponse.json({ success: false, message: 'Payment gateway not configured.' }, { status: 500 });
         }
 
-        // --- FIX: Use the correct endpoint for fetching an Order ---
-        const headers = {
-            'Content-Type': 'application/json',
-            'x-api-version': '2022-09-01', // Match the version used for order creation
-            'x-client-id': appId,
-            'x-client-secret': secretKey,
+        const orderId = `order_${uuidv4()}`;
+        
+        const orderDocRef = adminDb.collection("orders").doc(orderId);
+        await orderDocRef.set({
+            userId: userId,
+            planName: plan.name,
+            amount: plan.amount,
+            currency: "INR",
+            status: 'PENDING',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+
+        const cashfreeRequest = {
+            order_id: orderId,
+            order_amount: plan.amount,
+            order_currency: "INR",
+            customer_details: {
+                customer_id: userId,
+                customer_name: userName,
+                customer_email: userEmail,
+                customer_phone: userPhone,
+            },
+            order_meta: {
+                // This URL is where the user lands after payment completion/failure
+                return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?order_id={order_id}`,
+            },
         };
-        const response = await fetch(`${apiUrl}/orders/${order_id}`, { headers });
-        const cashfreeOrder = await response.json();
 
-        if (!response.ok) {
-            return NextResponse.json({ success: false, message: 'Failed to fetch order from Cashfree.' }, { status: 404 });
+        const cfResponse = await fetch(`${apiUrl}/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-version': '2022-09-01',
+                'x-client-id': appId,
+                'x-client-secret': secretKey,
+            },
+            body: JSON.stringify(cashfreeRequest),
+        });
+
+        const cfData = await cfResponse.json();
+
+        if (cfResponse.ok && cfData.payment_session_id) {
+            await orderDocRef.update({
+                cashfreeOrderId: cfData.order_id,
+                paymentSessionId: cfData.payment_session_id,
+            });
+
+            // **THE FIX**: Return the payment_session_id for the SDK to use.
+            return NextResponse.json({
+                success: true,
+                message: 'Payment session created.',
+                payment_session_id: cfData.payment_session_id, 
+            });
+        } else {
+            console.error("Cashfree order creation failed:", cfData);
+            await orderDocRef.update({
+                status: 'FAILED',
+                paymentError: cfData,
+            });
+            return NextResponse.json({
+                success: false,
+                message: cfData.message || 'Failed to create payment session.',
+            }, { status: cfResponse.status || 500 });
         }
-
-        // --- FIX: Check order_status, not link_status ---
-        if (cashfreeOrder.order_status === 'PAID') {
-            const orderDocRef = adminDb.collection("orders").doc(order_id);
-            const orderDoc = await orderDocRef.get();
-
-            if (orderDoc.exists && orderDoc.data()?.status !== 'PAID') {
-                const userId = orderDoc.data()?.userId;
-                
-                const userDocRef = adminDb.collection("users").doc(userId);
-                const creatorAppId = await getCreatorApplicationId(userId);
-
-                const expiryDate = new Date();
-                expiryDate.setMonth(expiryDate.getMonth() + 1);
-
-                const subscriptionData = {
-                    subscriptionStatus: 'active',
-                    subscriptionExpiresAt: Timestamp.fromDate(expiryDate),
-                    updatedAt: FieldValue.serverTimestamp()
-                };
-
-                const batch = adminDb.batch();
-                batch.update(userDocRef, subscriptionData);
-                if (creatorAppId) {
-                    const creatorDocRef = adminDb.collection("creatorApplications").doc(creatorAppId);
-                    batch.update(creatorDocRef, subscriptionData);
-                }
-                
-                batch.update(orderDocRef, {
-                    status: 'PAID',
-                    cashfreePaymentId: cashfreeOrder.cf_order_id, // Store relevant order data
-                    paidAt: FieldValue.serverTimestamp(),
-                });
-
-                await batch.commit();
-
-                return NextResponse.json({ success: true, status: 'PAID' });
-            } else if (orderDoc.exists && orderDoc.data()?.status === 'PAID') {
-                 return NextResponse.json({ success: true, status: 'PAID', message: 'Already verified.' });
-            }
-        }
-
-        return NextResponse.json({ success: false, status: cashfreeOrder.order_status });
-
     } catch (error: any) {
-        console.error("Verification Error:", error);
-        return NextResponse.json({ success: false, message: 'Internal server error during verification.' }, { status: 500 });
+        console.error("API error in /api/cashfree/subscribe:", error);
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ success: false, message: error.errors[0].message }, { status: 400 });
+        }
+        return NextResponse.json({ success: false, message: 'Internal server error.' }, { status: 500 });
     }
 }
