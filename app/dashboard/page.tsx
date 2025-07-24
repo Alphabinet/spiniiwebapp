@@ -18,7 +18,6 @@ import {
 import Image from "next/image";
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import Script from 'next/script';
 
 // --- Type Definitions ---
 interface ApplicationData {
@@ -69,23 +68,16 @@ interface Activity {
     time: string;
 }
 
-// ===== Subscription Component (Updated & Fixed) =====
+// ===== Subscription Component (Updated for Server Redirect) =====
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
-    const [isSDKReady, setIsSDKReady] = useState(false);
 
     const plan = { name: "Creator Pro Monthly", amount: 1.00 };
-
     const isProfileApproved = creatorApplication?.status === 'approved';
 
     const handlePurchase = async () => {
-        // More robust client-side check to provide immediate feedback.
-        // The server provides the definitive validation.
-        if (!isSDKReady) {
-            setMessage('Payment SDK is not ready yet. Please wait a moment.');
-            return;
-        }
+        // Perform client-side checks first
         if (!userData?.fullName || userData.fullName.length < 2) {
             setMessage('Your full name is required. Please update your profile first.');
             return;
@@ -100,7 +92,6 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
 
         try {
             const token = await user.getIdToken();
-
             const response = await fetch('/api/cashfree/subscribe', {
                 method: 'POST',
                 headers: {
@@ -115,24 +106,19 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     userId: user.uid,
                 }),
             });
-
             const data = await response.json();
 
-            // Handle both success and specific failure messages from the server
-            if (data.success && data.payment_session_id) {
-                const cashfree = (window as any).Cashfree({ mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || "production" });
-                cashfree.checkout({
-                    paymentSessionId: data.payment_session_id,
-                    redirectTarget: "_self"
-                });
+            // **FIX**: Instead of using the SDK, we redirect to the payment link from the server
+            if (data.success && data.payment_link) {
+                // Redirect the user to the Cashfree payment page
+                window.location.href = data.payment_link;
             } else {
-                // Display the specific, user-friendly error from the server
                 setMessage(`Error: ${data.message || 'Could not initiate payment.'}`);
+                setLoading(false);
             }
         } catch (error) {
-            setMessage('An unexpected error occurred. Please try again.');
+            setMessage('An unexpected error occurred.');
             console.error("Subscription purchase error:", error);
-        } finally {
             setLoading(false);
         }
     };
@@ -143,7 +129,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     if (!isProfileApproved) {
         return (
             <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
-                <div className="text-center">
+                 <div className="text-center">
                     <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
                     <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
                 </div>
@@ -154,7 +140,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
                     <p className="text-gray-300 mt-2 text-sm">
                         {creatorApplication?.status === 'pending'
-                            ? "Your application is under review. Once approved, you'll be able to subscribe."
+                            ? "Your application is currently under review. Once approved, you'll be able to subscribe."
                             : "Please update your application based on our feedback to become eligible for a subscription."
                         }
                     </p>
@@ -164,62 +150,65 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     }
     
     return (
-        <>
-            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} strategy="afterInteractive" />
-            <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
-                {!isSubscribed && (
-                    <div className="absolute top-0 right-0 h-24 w-24">
-                        <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
-                            OFF
-                        </div>
+        <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
+            {/* The <Script> tag is no longer needed */}
+            {!isSubscribed && (
+                <div className="absolute top-0 right-0 h-24 w-24">
+                    <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
+                        OFF
                     </div>
-                )}
-                <div className="text-center">
-                    <p className={`font-semibold text-sm sm:text-base ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}>PREMIUM MEMBERSHIP</p>
-                    <h3 className="text-xl sm:text-2xl font-bold mt-1">EXCLUSIVE ACCESS</h3>
                 </div>
-                {isSubscribed ? (
-                    <div className="border border-green-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-green-900/50">
-                        <p className="text-3xl sm:text-4xl font-bold">Expires On:</p>
-                        <p className="text-2xl sm:text-3xl font-bold mt-1">
-                            {userData?.subscriptionExpiresAt ? new Date(userData.subscriptionExpiresAt.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50">
-                        <p className="text-4xl sm:text-5xl font-bold text-white">₹{plan.amount} <span className="text-xl sm:text-2xl text-gray-400 line-through ml-2">₹999</span></p>
-                        <p className="text-gray-300 text-sm sm:text-base">per month</p>
-                    </div>
-                )}
-                {!isSubscribed && (
-                    <div className="text-center mb-6 sm:mb-8">
-                        <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
-                            LIMITED TIME OFFER
-                        </p>
-                    </div>
-                )}
-                <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
-                </ul>
-                <button
-                    onClick={handlePurchase}
-                    disabled={loading || isSubscribed}
-                    className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
-                >
-                    {loading ? "Processing..." : (isSubscribed ? "Subscribed" : "Get Started")}
-                </button>
-                {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
-                {isSubscribed && <p className="text-center mt-4 text-xs sm:text-sm text-green-100">Enjoy your premium benefits!</p>}
-                <p className={`text-xs text-center mt-4 ${isSubscribed ? 'text-green-200' : 'text-gray-400'}`}>
-                    By {isSubscribed ? "being subscribed" : "subscribing"}, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
-                </p>
+            )}
+            <div className="text-center">
+                <p className={`font-semibold text-sm sm:text-base ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}>PREMIUM MEMBERSHIP</p>
+                <h3 className="text-xl sm:text-2xl font-bold mt-1">EXCLUSIVE ACCESS</h3>
             </div>
-        </>
+            {isSubscribed ? (
+                <div className="border border-green-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-green-900/50">
+                    <p className="text-3xl sm:text-4xl font-bold">Expires On:</p>
+                    <p className="text-2xl sm:text-3xl font-bold mt-1">
+                        {userData?.subscriptionExpiresAt ? new Date(userData.subscriptionExpiresAt.toDate()).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}
+                    </p>
+                </div>
+            ) : (
+                <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50">
+                    <p className="text-4xl sm:text-5xl font-bold text-white">₹{plan.amount} <span className="text-xl sm:text-2xl text-gray-400 line-through ml-2">₹999</span></p>
+                    <p className="text-gray-300 text-sm sm:text-base">per month</p>
+                </div>
+            )}
+            {!isSubscribed && (
+                <div className="text-center mb-6 sm:mb-8">
+                    <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
+                        LIMITED TIME OFFER
+                    </p>
+                </div>
+            )}
+            <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
+                <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
+            </ul>
+            <button
+                onClick={handlePurchase}
+                disabled={loading || isSubscribed}
+                className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
+            >
+                {loading
+                    ? "Redirecting to payment..."
+                    : isSubscribed
+                    ? "Subscribed"
+                    : "Get Started"
+                }
+            </button>
+            {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
+            {isSubscribed && <p className="text-center mt-4 text-xs sm:text-sm text-green-100">Enjoy your premium benefits!</p>}
+            <p className={`text-xs text-center mt-4 ${isSubscribed ? 'text-green-200' : 'text-gray-400'}`}>
+                By {isSubscribed ? "being subscribed" : "subscribing"}, you agree to our <Link href="/terms" className="underline">Terms of Service</Link> & <Link href="/privacy" className="underline">Privacy Policy</Link>. Cancel anytime.
+            </p>
+        </div>
     );
 }
 
@@ -965,9 +954,10 @@ function CreatorDashboard() {
     const [creatorData, setCreatorData] = useState<ApplicationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile');
+    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile'); 
 
 
+    // Effect for User Data, Creator Data & Account Type
     useEffect(() => {
         if (!user) {
             setLoading(false);
@@ -991,7 +981,7 @@ function CreatorDashboard() {
                             subscriptionStatus: 'inactive',
                             updatedAt: serverTimestamp(),
                         });
-                        fetchedUserData.subscriptionStatus = 'inactive';
+                        fetchedUserData.subscriptionStatus = 'inactive'; 
                     }
                 }
 
@@ -999,7 +989,7 @@ function CreatorDashboard() {
                     setView('profile');
                 }
             } else {
-                const initialData = {
+                const initialData: UserData = {
                     userId: user.uid,
                     email: user.email,
                     fullName: user.displayName || '',
@@ -1008,8 +998,8 @@ function CreatorDashboard() {
                     subscriptionStatus: 'inactive',
                 };
                 await setDoc(userDocRef, initialData, { merge: true });
-                fetchedUserData = initialData as UserData;
-                setUserData(initialData as UserData);
+                fetchedUserData = initialData;
+                setUserData(initialData);
                 setView('profile');
             }
 
@@ -1020,13 +1010,20 @@ function CreatorDashboard() {
                     setCreatorData(data);
 
                     if (fetchedUserData?.accountType !== 'creator') {
-                        await setDoc(userDocRef, { accountType: 'creator' }, { merge: true });
+                        try {
+                            await setDoc(userDocRef, { accountType: 'creator' }, { merge: true });
+                        } catch (error) {
+                            console.error("Error updating user account type to creator:", error);
+                        }
                     }
                     
-                    if (data.status === 'approved') {
-                        setView('dashboard');
-                    } else {
-                        setView('applicationForm');
+                    if (view !== 'profile' && view !== 'applicationForm') {
+                         setView('dashboard');
+                    }
+                    if (!fetchedUserData?.mobileNumber) {
+                        setView('profile');
+                    } else if (view !== 'applicationForm' && view !== 'profile') {
+                         setView('dashboard');
                     }
 
 
@@ -1044,9 +1041,13 @@ function CreatorDashboard() {
                 } else {
                     setCreatorData(null);
                     if (fetchedUserData?.accountType !== 'normal') {
-                        await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
+                        try {
+                            await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
+                        } catch (error) {
+                            console.error("Error updating user account type to normal:", error);
+                        }
                     }
-                    
+                   
                     if (!fetchedUserData?.mobileNumber) {
                         setView('profile');
                     } else {
@@ -1066,16 +1067,16 @@ function CreatorDashboard() {
         });
 
         return () => unsubscribeUser();
-    }, [user, router]);
+    }, [user, router, view]);
 
     const handleMobileNumberSave = async (mobileNumber: string) => {
         if (!user) throw new Error("User not authenticated.");
         const userDocRef = doc(db, "users", user.uid);
         try {
             await updateDoc(userDocRef, { mobileNumber: mobileNumber, updatedAt: serverTimestamp() });
-            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null);
+            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null); 
             
-            if (creatorData && creatorData.status === 'approved') {
+            if (creatorData) {
                 setView('dashboard');
             } else {
                 setView('applicationForm');
@@ -1123,6 +1124,7 @@ function CreatorDashboard() {
 
                     return (
                         <>
+                            {/* Creator Profile Summary */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
                                     <Image
@@ -1169,6 +1171,7 @@ function CreatorDashboard() {
                                 </div>
                             </div>
 
+                            {/* Application Status (for creators) */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
                                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${statusDisplay.bgColor} ${statusDisplay.color}`}>
@@ -1183,6 +1186,7 @@ function CreatorDashboard() {
                                 )}
                             </div>
 
+                            {/* Recent Activity (for creators) */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
                                 <ul className="space-y-4">

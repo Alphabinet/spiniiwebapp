@@ -1,6 +1,5 @@
 // app/api/cashfree/verify-payment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-// --- FIX: Import the ADMIN database instance ---
 import { adminDb } from '@/lib/firebase/admin'; 
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 
@@ -18,16 +17,16 @@ async function getCreatorApplicationId(userId: string): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
-    // Check if Admin SDK was initialized correctly
     if (!adminDb) {
         console.error("CRITICAL: Firebase Admin SDK is not initialized in verify-payment route.");
         return NextResponse.json({ success: false, message: 'Server configuration error.' }, { status: 500 });
     }
 
     try {
-        const { order_id } = await req.json();
-        if (!order_id) {
-            return NextResponse.json({ success: false, message: 'Order ID is required.' }, { status: 400 });
+        // --- FIX: Expect link_id, not order_id ---
+        const { link_id } = await req.json();
+        if (!link_id) {
+            return NextResponse.json({ success: false, message: 'Payment Link ID is required.' }, { status: 400 });
         }
 
         // 1. Get credentials
@@ -39,26 +38,27 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: 'Payment gateway not configured.' }, { status: 500 });
         }
 
-        // 2. Fetch order details from Cashfree's server
+        // 2. Fetch payment link status from Cashfree's server
         const headers = {
             'Content-Type': 'application/json',
-            'x-api-version': '2022-09-01',
+            'x-api-version': '2023-08-01', // Match the version used for link creation
             'x-client-id': appId,
             'x-client-secret': secretKey,
         };
-        const response = await fetch(`${apiUrl}/orders/${order_id}`, { headers });
-        const cashfreeOrder = await response.json();
+        // --- FIX: Use the correct endpoint for fetching link status ---
+        const response = await fetch(`${apiUrl}/links/${link_id}/status`, { headers });
+        const cashfreeLink = await response.json();
 
         if (!response.ok) {
-            return NextResponse.json({ success: false, message: 'Failed to fetch order from Cashfree.' }, { status: 404 });
+            return NextResponse.json({ success: false, message: 'Failed to fetch payment link from Cashfree.' }, { status: 404 });
         }
 
         // 3. Verify the payment status from Cashfree's response
-        if (cashfreeOrder.order_status === 'PAID') {
-            const orderDocRef = adminDb.collection("orders").doc(order_id);
+        if (cashfreeLink.link_status === 'PAID') {
+            const orderDocRef = adminDb.collection("orders").doc(link_id);
             const orderDoc = await orderDocRef.get();
 
-            // Check if the order exists in our DB and hasn't already been processed
+            // Check if the order exists and hasn't already been processed
             if (orderDoc.exists && orderDoc.data()?.status !== 'PAID') {
                 const userId = orderDoc.data()?.userId;
                 
@@ -85,7 +85,11 @@ export async function POST(req: NextRequest) {
                 
                 batch.update(orderDocRef, {
                     status: 'PAID',
-                    cashfreePaymentId: cashfreeOrder.cf_order_id,
+                    cashfreePaymentDetails: {
+                        cf_link_id: cashfreeLink.cf_link_id,
+                        link_status: cashfreeLink.link_status,
+                        link_payment_id: cashfreeLink.link_payment_id,
+                    },
                     paidAt: FieldValue.serverTimestamp(),
                 });
 
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
         }
 
         // If status is not PAID, return the current status
-        return NextResponse.json({ success: false, status: cashfreeOrder.order_status });
+        return NextResponse.json({ success: false, status: cashfreeLink.link_status });
 
     } catch (error: any) {
         console.error("Verification Error:", error);

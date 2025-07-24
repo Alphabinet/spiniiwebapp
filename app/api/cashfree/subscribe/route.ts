@@ -2,53 +2,48 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { z } from 'zod'; // Import Zod for validation
+import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 
-// Define a strict schema for the incoming request body.
-// This ensures all required fields are present and correctly formatted.
+// Define the expected shape of the incoming request body with Zod
 const subscribeSchema = z.object({
-    userId: z.string().min(1, "User ID cannot be empty."),
-    userName: z.string().min(2, "A full name is required."),
-    userEmail: z.string().email("A valid email address is required."),
-    // This regex validates a standard 10-digit Indian mobile number.
-    userPhone: z.string().regex(/^[6-9]\d{9}$/, "A valid 10-digit mobile number is required."),
-    plan: z.object({
-        name: z.string().min(1, "Plan name is required."),
-        amount: z.number().positive("Plan amount must be a positive number."),
-    }),
+  userId: z.string().min(1, "User ID is required"),
+  userName: z.string().min(2, "Full name is required and must be at least 2 characters."),
+  userEmail: z.string().email("A valid email is required"),
+  // Using a regex for Indian mobile numbers
+  userPhone: z.string().regex(/^[6-9]\d{9}$/, "A valid 10-digit Indian mobile number is required."),
+  plan: z.object({
+    name: z.string(),
+    amount: z.number().positive("Amount must be positive"),
+  }),
 });
-
 
 export async function POST(req: NextRequest) {
     try {
         const token = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!token) {
-            return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+            return NextResponse.json({ success: false, message: 'Unauthorized: No token provided.' }, { status: 401 });
         }
 
         // 1. Verify user's identity from token
+        let decodedToken;
         try {
-            await adminAuth.verifyIdToken(token);
+            decodedToken = await adminAuth.verifyIdToken(token);
         } catch (error) {
             console.error("Firebase ID Token verification failed:", error);
-            return NextResponse.json({ success: false, message: 'Unauthorized: Invalid token' }, { status: 401 });
+            return NextResponse.json({ success: false, message: 'Unauthorized: Invalid token.' }, { status: 401 });
         }
-
-        // 2. Parse and VALIDATE the request body using the Zod schema
+        
         const body = await req.json();
-        const validation = subscribeSchema.safeParse(body);
-
-        if (!validation.success) {
-            // If validation fails, return a specific error message from Zod.
-            return NextResponse.json({
-                success: false,
-                message: validation.error.errors[0].message, // e.g., "A valid 10-digit mobile number is required."
-            }, { status: 400 });
+        
+        // 2. Validate the request body using Zod
+        const validationResult = subscribeSchema.safeParse(body);
+        if (!validationResult.success) {
+            return NextResponse.json({ success: false, message: validationResult.error.errors[0].message }, { status: 400 });
         }
 
-        // Use the validated data from this point forward
-        const { userEmail, userName, userPhone, plan, userId } = validation.data;
-
+        const { userEmail, userName, userPhone, plan, userId } = validationResult.data;
+        
         // 3. Get Cashfree credentials from environment variables
         const appId = process.env.CASHFREE_APP_ID;
         const secretKey = process.env.CASHFREE_SECRET_KEY;
@@ -59,45 +54,47 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: 'Payment gateway not configured.' }, { status: 500 });
         }
 
-        // 4. Prepare order details
-        const orderId = `order_${Date.now()}_${userId.substring(0, 8)}`;
-        const orderAmount = plan.amount;
-        const orderCurrency = "INR";
-
+        // 4. Prepare link details
+        const linkId = `link_${uuidv4()}`;
+        
         // 5. Create a PENDING order document in Firestore first.
-        const orderDocRef = adminDb.collection("orders").doc(orderId);
+        const orderDocRef = adminDb.collection("orders").doc(linkId);
         await orderDocRef.set({
             userId: userId,
             planName: plan.name,
-            amount: orderAmount,
-            currency: orderCurrency,
+            amount: plan.amount,
+            currency: "INR",
             status: 'PENDING',
             createdAt: FieldValue.serverTimestamp(),
         });
 
-        // 6. Prepare payload for Cashfree
+        // 6. Prepare payload for Cashfree Payment Link API
         const cashfreeRequest = {
-            order_id: orderId,
-            order_amount: orderAmount,
-            order_currency: orderCurrency,
+            link_id: linkId,
+            link_amount: plan.amount,
+            link_currency: "INR",
+            link_purpose: `Subscription for ${plan.name}`,
             customer_details: {
-                customer_id: userId,
-                customer_name: userName,
-                customer_email: userEmail,
                 customer_phone: userPhone,
+                customer_email: userEmail,
+                customer_name: userName,
             },
-            order_meta: {
-                return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?order_id={order_id}`,
+            link_notify: {
+                send_sms: true,
+                send_email: true,
+            },
+            link_meta: {
+                return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?link_id={link_id}`,
                 notify_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/cashfree/webhook`,
             },
         };
 
-        // 7. Call Cashfree to create the order
-        const cfResponse = await fetch(`${apiUrl}/orders`, {
+        // 7. Call Cashfree to create the payment link
+        const cfResponse = await fetch(`${apiUrl}/links`, { // <-- IMPORTANT: Using /links endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-version': '2022-09-01',
+                'x-api-version': '2023-08-01', // Use the latest recommended version for links
                 'x-client-id': appId,
                 'x-client-secret': secretKey,
             },
@@ -106,21 +103,20 @@ export async function POST(req: NextRequest) {
 
         const cfData = await cfResponse.json();
 
-        // 8. Handle response
-        if (cfResponse.ok && cfData.payment_session_id) {
+        // 8. Handle response from Cashfree
+        if (cfResponse.ok && cfData.link_url) {
             await orderDocRef.update({
-                cashfreeOrderId: cfData.cf_order_id,
-                paymentSessionId: cfData.payment_session_id,
+                cashfreeLinkId: cfData.link_id,
+                paymentLink: cfData.link_url,
             });
 
             return NextResponse.json({
                 success: true,
-                message: 'Payment session created.',
-                payment_session_id: cfData.payment_session_id,
-                order_id: orderId,
+                message: 'Payment link created.',
+                payment_link: cfData.link_url, // <-- Send this back to the frontend
             });
         } else {
-            console.error("Cashfree order creation failed:", cfData);
+            console.error("Cashfree link creation failed:", cfData);
             await orderDocRef.update({
                 status: 'FAILED',
                 paymentError: cfData,
@@ -128,7 +124,7 @@ export async function POST(req: NextRequest) {
 
             return NextResponse.json({
                 success: false,
-                message: cfData.message || 'Failed to create payment session with Cashfree.',
+                message: cfData.message || 'Failed to create payment link with Cashfree.',
             }, { status: cfResponse.status || 500 });
         }
 

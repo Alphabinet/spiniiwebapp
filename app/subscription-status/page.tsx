@@ -1,22 +1,22 @@
-// app/subscription-status/page.tsx
 "use client";
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import Link from 'next/link';
 
 function StatusContent() {
     const searchParams = useSearchParams();
-    const router = useRouter();
-    const order_id = searchParams.get('order_id');
+    // **FIX**: Read 'link_id' from the URL, not 'order_id'
+    const link_id = searchParams.get('link_id');
     const [status, setStatus] = useState<'processing' | 'success' | 'failed'>('processing');
     const [message, setMessage] = useState('Verifying your payment, please wait...');
 
     useEffect(() => {
-        if (!order_id) {
+        // **FIX**: Check for link_id
+        if (!link_id) {
             setStatus('failed');
-            setMessage('No order ID found. Invalid request.');
+            setMessage('No Payment ID found. Invalid request.');
             return;
         }
 
@@ -25,7 +25,8 @@ function StatusContent() {
                 const response = await fetch('/api/cashfree/verify-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ order_id }),
+                    // **FIX**: Send link_id in the body
+                    body: JSON.stringify({ link_id }),
                 });
 
                 const data = await response.json();
@@ -35,7 +36,7 @@ function StatusContent() {
                     setMessage('Your subscription is now active!');
                 } else {
                     setStatus('failed');
-                    setMessage(data.message || 'Payment verification failed. Please contact support.');
+                    setMessage(data.message || `Payment status: ${data.status || 'Failed'}. Please contact support.`);
                 }
             } catch (error) {
                 setStatus('failed');
@@ -47,7 +48,7 @@ function StatusContent() {
         const timer = setTimeout(verifyPayment, 3000);
         return () => clearTimeout(timer);
 
-    }, [order_id]);
+    }, [link_id]);
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -59,9 +60,9 @@ function StatusContent() {
                     </>
                 )}
                 {status === 'success' && (
-                     <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 mb-6">
-                        <CheckCircleIcon className="h-12 w-12 text-green-600" />
-                    </div>
+                       <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 mb-6">
+                           <CheckCircleIcon className="h-12 w-12 text-green-600" />
+                       </div>
                 )}
                 {status === 'failed' && (
                     <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
@@ -70,9 +71,9 @@ function StatusContent() {
                 )}
                 <p className="text-gray-600 text-lg">{message}</p>
                  {status !== 'processing' && (
-                    <Link href="/dashboard" className="inline-block mt-6 px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
-                        Go to Dashboard
-                    </Link>
+                     <Link href="/creator-dashboard" className="inline-block mt-6 px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
+                         Go to Dashboard
+                     </Link>
                  )}
             </div>
         </div>
