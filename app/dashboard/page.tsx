@@ -69,13 +69,16 @@ interface Activity {
     time: string; // Already formatted string
 }
 
-// ===== Subscription Component =====
-function SubscriptionCard({ user, userData }: { user: FirebaseUser, userData: UserData | null }) {
+// ===== Subscription Component (Updated) =====
+function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [isSDKReady, setIsSDKReady] = useState(false);
 
     const plan = { name: "Creator Pro Monthly", amount: 1.00 }; // Changed to 1 INR
+
+    // --- NEW: Check if the creator's profile is approved ---
+    const isProfileApproved = creatorApplication?.status === 'approved';
 
     const handlePurchase = async () => {
         if (!isSDKReady) {
@@ -135,9 +138,35 @@ function SubscriptionCard({ user, userData }: { user: FirebaseUser, userData: Us
     const isSubscribed = userData?.subscriptionStatus === 'active' &&
         (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
 
+    // --- NEW: Render a message if the profile is not approved ---
+    if (!isProfileApproved) {
+        return (
+            <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
+                 <div className="text-center">
+                    <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
+                    <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
+                </div>
+                <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50 flex-grow flex flex-col justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
+                    <p className="text-gray-300 mt-2 text-sm">
+                        {creatorApplication?.status === 'pending'
+                            ? "Your application is currently under review. Once approved, you'll be able to subscribe."
+                            : "Please update your application based on our feedback to become eligible for a subscription."
+                        }
+                    </p>
+                </div>
+            </div>
+        );
+    }
+    
+    // The original subscription card UI is returned only if the profile is approved
     return (
         <>
-            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} />
+            {/* Added strategy="afterInteractive" for better Next.js hydration */}
+            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} strategy="afterInteractive" />
             <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
                 {!isSubscribed && ( // Show OFF tag only if not subscribed
                     <div className="absolute top-0 right-0 h-24 w-24">
@@ -1293,7 +1322,11 @@ function CreatorDashboard() {
                 {/* Subscription Card (Right/One-third) */}
                 <div className="lg:col-span-1">
                     {user && userData && ( // Ensure user and userData are not null
-                        <SubscriptionCard user={user} userData={userData} />
+                        <SubscriptionCard 
+                            user={user} 
+                            userData={userData} 
+                            creatorApplication={creatorData} 
+                        />
                     )}
                 </div>
             </div>

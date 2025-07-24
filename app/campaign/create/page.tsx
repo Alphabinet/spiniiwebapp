@@ -307,6 +307,100 @@ const CampaignCreationPage = () => {
         }
         return isValid;
     };
+    
+    // --- FIX: Create a single function to validate ALL required fields before payment ---
+    const validateAllFields = (): boolean => {
+        const newErrors: Partial<Record<keyof CampaignFormData | 'services', string>> = {};
+        const allFields: (keyof CampaignFormData | 'services')[] = [
+            'campaignName', 'platform', 'services', 'minimumFollowers', 'numberOfCreators',
+            'minAge', 'maxAge', 'gender', 'location', 'categories', 'campaignDescription', 'deadline',
+            'ownerFullName', 'contactNumber', 'ownerEmailAddress', 'ownerCity', 'ownerDistrict',
+            'ownerState', 'ownerCountry'
+        ];
+
+        let isValidOverall = true;
+
+        for (const field of allFields) {
+            const value = formData[field as keyof CampaignFormData];
+            let fieldIsValid = true;
+
+            if (field === 'services') {
+                const totalServices = Object.values(formData.services).reduce((sum, count) => sum + count, 0);
+                if (totalServices === 0) {
+                    newErrors.services = 'Please select at least one service.';
+                    fieldIsValid = false;
+                }
+            } else if (field === 'categories') {
+                if (Array.isArray(value) && value.length === 0) {
+                    newErrors.categories = 'Please select at least one category.';
+                    fieldIsValid = false;
+                }
+            } else if (typeof value === 'string' && value.trim() === '') {
+                newErrors[field as keyof CampaignFormData] = 'This field is required.';
+                fieldIsValid = false;
+            } else if (typeof value === 'number' && (value === '' || isNaN(value))) {
+                // This case handles number inputs where the value might be 0, but 0 is a valid input for certain fields like services counts.
+                // However, for fields like minimumFollowers, an empty string or NaN derived from an empty input should be caught.
+                // The earlier check `!value && value !== 0` already handles general empty/zero cases.
+                // Let's ensure explicit check for number fields that *must* have a positive value if applicable.
+                if (['minimumFollowers', 'minAge', 'maxAge', 'numberOfCreators'].includes(field as string)) {
+                     if (value === '' || isNaN(Number(value)) || Number(value) <= 0) { // For fields that require a positive number
+                        newErrors[field as keyof CampaignFormData] = 'This field is required and must be a positive number.';
+                        fieldIsValid = false;
+                    }
+                } else if (!value && value !== 0) { // General check for other number fields that might be 0 but still required
+                    newErrors[field as keyof CampaignFormData] = 'This field is required.';
+                    fieldIsValid = false;
+                }
+            } else if (!value && value !== 0) { // This handles other non-numeric empty required fields
+                newErrors[field as keyof CampaignFormData] = 'This field is required.';
+                fieldIsValid = false;
+            }
+            
+            if (!fieldIsValid) {
+                isValidOverall = false;
+            }
+        }
+        
+        // Add specific logical validations
+        if (formData.minimumFollowers !== '' && Number(formData.minimumFollowers) < 1000) {
+            newErrors.minimumFollowers = 'Minimum followers must be at least 1,000.';
+            isValidOverall = false;
+        }
+        if (formData.minAge !== '' && Number(formData.minAge) < 13) {
+            newErrors.minAge = 'Minimum age must be at least 13.';
+            isValidOverall = false;
+        }
+        if (formData.minAge !== '' && formData.maxAge !== '' && Number(formData.minAge) > Number(formData.maxAge)) {
+            newErrors.minAge = 'Min age cannot be greater than max age.';
+            newErrors.maxAge = 'Max age cannot be less than min age.';
+            isValidOverall = false;
+        }
+        if (formData.deadline) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to start of day
+            const deadlineDate = new Date(formData.deadline);
+            deadlineDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+            if (deadlineDate < today) {
+                newErrors.deadline = 'Deadline cannot be in the past.';
+                isValidOverall = false;
+            }
+        }
+        const phoneRegex = /^\+?\d{10,15}$/;
+        if (formData.contactNumber && !phoneRegex.test(formData.contactNumber)) {
+            newErrors.contactNumber = 'Please enter a valid Contact Number (10-15 digits).';
+            isValidOverall = false;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (formData.ownerEmailAddress && !emailRegex.test(formData.ownerEmailAddress)) {
+            newErrors.ownerEmailAddress = 'Please enter a valid Email Address.';
+            isValidOverall = false;
+        }
+        
+        setErrors(newErrors);
+        return isValidOverall;
+    };
 
     const nextStep = () => {
         if (currentStep === steps.length - 2) { // If it's the "Summary & Payment" step
@@ -314,7 +408,7 @@ const CampaignCreationPage = () => {
             // Validation for payment itself happens on handlePayment.
             setCurrentStep(currentStep + 1);
             setErrors({});
-        } else if (validateStep()) {
+        } else if (validateStep()) { // This is for stepping through prior steps one by one
             setCurrentStep(currentStep + 1);
             setErrors({});
         }
@@ -327,7 +421,7 @@ const CampaignCreationPage = () => {
     const getServiceFee = (creators: number): number => {
         if (creators <= 0) return 0;
         const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
-        return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
+        return applicableTier ? applicableTier.fee : (SERVICE_F2EE_TIERS[0]?.fee || 0);
     };
 
     const { creatorsCost, serviceFee, totalAmount } = useMemo(() => {
@@ -351,22 +445,32 @@ const CampaignCreationPage = () => {
             toast.error('Total amount must be greater than zero.');
             return;
         }
-        // Validate all previous steps' data one last time before payment
-        let allStepsValid = true;
-        for (let i = 0; i < steps.length - 1; i++) { // Exclude "Summary & Payment" and "Confirmation"
-            const tempCurrentStep = currentStep; // Store currentStep temporarily
-            setCurrentStep(i); // Temporarily set step for validation
-            if (!validateStep()) {
-                allStepsValid = false;
-                break;
-            }
-            setCurrentStep(tempCurrentStep); // Revert to original currentStep
-        }
 
-        if (!allStepsValid) {
-            toast.error('Please correct all previous step errors before proceeding to payment.');
-            // Optionally, navigate back to the first step with an error
-            setCurrentStep(0);
+        // --- FIX: Use the new, comprehensive validation function ---
+        if (!validateAllFields()) {
+            toast.error('Please go back and correct the highlighted errors before paying.');
+            // Find the first step with an error and navigate to it
+            const firstErrorField = Object.keys(errors).find(key => errors[key as keyof (CampaignFormData | { services: string })]);
+            
+            if (firstErrorField) {
+                // Special handling for 'services' field to map it to step 1
+                const fieldToFind = firstErrorField === 'services' ? 'services' : firstErrorField;
+                const stepIndexWithError = steps.findIndex(step => 
+                    step.fields.includes(fieldToFind as keyof CampaignFormData)
+                );
+
+                if (stepIndexWithError !== -1 && stepIndexWithError < currentStep) {
+                    setCurrentStep(stepIndexWithError);
+                } else if (stepIndexWithError === -1) {
+                    // Fallback if field isn't explicitly in a step's fields (should ideally not happen with comprehensive allFields list)
+                    setCurrentStep(0);
+                }
+            } else {
+                // If validateAllFields returns false but errors object is empty,
+                // it implies a subtle validation bug or a race condition.
+                // Fallback to first step.
+                setCurrentStep(0);
+            }
             return;
         }
 
@@ -732,7 +836,13 @@ const CampaignCreationPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsCashfreeReady(true)} strategy="lazyOnload" />
+            {/* --- FIX: Use a more reliable script loading strategy --- */}
+            <Script
+                src="https://sdk.cashfree.com/js/v3/cashfree.js"
+                onLoad={() => setIsCashfreeReady(true)}
+                strategy="afterInteractive"
+            />
+            
             <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">
