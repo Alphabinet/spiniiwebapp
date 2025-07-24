@@ -309,7 +309,12 @@ const CampaignCreationPage = () => {
     };
 
     const nextStep = () => {
-        if (validateStep()) {
+        if (currentStep === steps.length - 2) { // If it's the "Summary & Payment" step
+            // For the last step before confirmation, we just move to it.
+            // Validation for payment itself happens on handlePayment.
+            setCurrentStep(currentStep + 1);
+            setErrors({});
+        } else if (validateStep()) {
             setCurrentStep(currentStep + 1);
             setErrors({});
         }
@@ -333,6 +338,7 @@ const CampaignCreationPage = () => {
     }, [formData.totalCreatorBudget, formData.numberOfCreators]);
 
     const handlePayment = async () => {
+        // Essential checks before initiating payment
         if (!user) {
             toast.error('Authentication error. Please refresh and log in.');
             return;
@@ -343,6 +349,24 @@ const CampaignCreationPage = () => {
         }
         if (totalAmount <= 0) {
             toast.error('Total amount must be greater than zero.');
+            return;
+        }
+        // Validate all previous steps' data one last time before payment
+        let allStepsValid = true;
+        for (let i = 0; i < steps.length - 1; i++) { // Exclude "Summary & Payment" and "Confirmation"
+            const tempCurrentStep = currentStep; // Store currentStep temporarily
+            setCurrentStep(i); // Temporarily set step for validation
+            if (!validateStep()) {
+                allStepsValid = false;
+                break;
+            }
+            setCurrentStep(tempCurrentStep); // Revert to original currentStep
+        }
+
+        if (!allStepsValid) {
+            toast.error('Please correct all previous step errors before proceeding to payment.');
+            // Optionally, navigate back to the first step with an error
+            setCurrentStep(0);
             return;
         }
 
@@ -383,13 +407,13 @@ const CampaignCreationPage = () => {
             } else {
                 toast.error(data.message || "Could not initiate payment.");
                 setPaymentStatus('failed');
-                setCurrentStep(currentStep + 1); 
+                setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
             }
         } catch (err) {
             console.error('An error occurred during payment setup.', err);
             toast.error('An unexpected error occurred during payment setup.');
             setPaymentStatus('failed');
-            setCurrentStep(currentStep + 1);
+            setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
         } finally {
             setIsSubmitting(false);
         }
@@ -657,11 +681,16 @@ const CampaignCreationPage = () => {
                                         <p className="text-lg font-bold text-gray-900">Total Payable</p>
                                         <p className="text-xl sm:text-2xl font-extrabold text-purple-700">₹{Math.round(totalAmount).toLocaleString('en-IN')}</p>
                                     </div>
-                                    <Button onClick={handlePayment} disabled={isSubmitting || !user || !isCashfreeReady} className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4">
+                                    <Button
+                                        onClick={handlePayment}
+                                        disabled={isSubmitting || !user || !isCashfreeReady || totalAmount <= 0} // Add totalAmount check
+                                        className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4"
+                                    >
                                         {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-5 w-5" />}
-                                        {isCashfreeReady ? 'Pay Securely' : 'Loading Gateway...'}
+                                        {isCashfreeReady ? (isSubmitting ? 'Processing Payment...' : 'Pay Securely') : 'Loading Gateway...'}
                                     </Button>
                                     {!user && <p className="text-xs text-red-500 text-center mt-2">Please log in to complete payment.</p>}
+                                    {totalAmount <= 0 && <p className="text-xs text-red-500 text-center mt-2">Total amount must be greater than zero.</p>}
                                 </div>
                             </div>
                         </div>
@@ -703,12 +732,7 @@ const CampaignCreationPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            {/* --- FIX: Changed script loading strategy to 'beforeInteractive' for faster loading --- */}
-            <Script
-                src="https://sdk.cashfree.com/js/v3/cashfree.js"
-                onLoad={() => setIsCashfreeReady(true)}
-                strategy="beforeInteractive"
-            />
+            <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsCashfreeReady(true)} strategy="lazyOnload" />
             <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">
@@ -741,12 +765,13 @@ const CampaignCreationPage = () => {
                             <Button onClick={prevStep} variant="outline" className="px-3 sm:px-4 py-2 text-sm sm:text-base" disabled={currentStep === 0}>
                                 <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" /> Back
                             </Button>
+                            {/* The "Review & Pay" button now specifically handles validation for moving to the summary step */}
                             {currentStep < steps.length - 2 ? (
                                 <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700">
                                     Next <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>
                             ) : (
-                                <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700">
+                                <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
                                     Review & Pay <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>
                             )}
