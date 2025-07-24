@@ -6,9 +6,9 @@ import { auth, db, storage } from "@/lib/firebaseConfig";
 import {
     collection, query, where, onSnapshot, DocumentData, doc, setDoc,
     updateDoc, serverTimestamp, orderBy, Timestamp, FieldValue, limit,
-    writeBatch, addDoc, getDocs
+    addDoc, getDocs
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // Import storage functions
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { User as FirebaseUser } from "firebase/auth";
@@ -66,27 +66,32 @@ interface UserData {
 interface Activity {
     type: string;
     description: string;
-    time: string; // Already formatted string
+    time: string;
 }
 
-// ===== Subscription Component (Updated) =====
+// ===== Subscription Component (Updated & Fixed) =====
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [isSDKReady, setIsSDKReady] = useState(false);
 
-    const plan = { name: "Creator Pro Monthly", amount: 1.00 }; // Changed to 1 INR
+    const plan = { name: "Creator Pro Monthly", amount: 1.00 };
 
-    // --- NEW: Check if the creator's profile is approved ---
     const isProfileApproved = creatorApplication?.status === 'approved';
 
     const handlePurchase = async () => {
+        // More robust client-side check to provide immediate feedback.
+        // The server provides the definitive validation.
         if (!isSDKReady) {
-            setMessage('Payment SDK not ready. Please wait a moment.');
+            setMessage('Payment SDK is not ready yet. Please wait a moment.');
             return;
         }
-        if (!userData?.mobileNumber) {
-            setMessage('Mobile number is required. Please update your profile first.');
+        if (!userData?.fullName || userData.fullName.length < 2) {
+            setMessage('Your full name is required. Please update your profile first.');
+            return;
+        }
+        if (!userData?.mobileNumber || !/^[6-9]\d{9}$/.test(userData.mobileNumber)) {
+            setMessage('A valid 10-digit mobile number is required. Please update your profile.');
             return;
         }
 
@@ -104,31 +109,28 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                 },
                 body: JSON.stringify({
                     userEmail: user.email,
-                    userName: userData.fullName || user.displayName,
+                    userName: userData.fullName,
                     userPhone: userData.mobileNumber,
                     plan: plan,
-                    userId: user.uid, // Pass userId for server-side order storage
+                    userId: user.uid,
                 }),
             });
 
             const data = await response.json();
 
+            // Handle both success and specific failure messages from the server
             if (data.success && data.payment_session_id) {
                 const cashfree = (window as any).Cashfree({ mode: process.env.NEXT_PUBLIC_CASHFREE_MODE || "production" });
                 cashfree.checkout({
                     paymentSessionId: data.payment_session_id,
                     redirectTarget: "_self"
                 });
-
-                // IMPORTANT: Removed client-side subscription status update here.
-                // The actual subscription status update should happen ONLY after Cashfree
-                // confirms payment via webhook or direct verification API call on redirect.
-
             } else {
+                // Display the specific, user-friendly error from the server
                 setMessage(`Error: ${data.message || 'Could not initiate payment.'}`);
             }
         } catch (error) {
-            setMessage('An unexpected error occurred.');
+            setMessage('An unexpected error occurred. Please try again.');
             console.error("Subscription purchase error:", error);
         } finally {
             setLoading(false);
@@ -138,11 +140,10 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     const isSubscribed = userData?.subscriptionStatus === 'active' &&
         (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
 
-    // --- NEW: Render a message if the profile is not approved ---
     if (!isProfileApproved) {
         return (
             <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
-                 <div className="text-center">
+                <div className="text-center">
                     <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
                     <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
                 </div>
@@ -153,7 +154,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
                     <p className="text-gray-300 mt-2 text-sm">
                         {creatorApplication?.status === 'pending'
-                            ? "Your application is currently under review. Once approved, you'll be able to subscribe."
+                            ? "Your application is under review. Once approved, you'll be able to subscribe."
                             : "Please update your application based on our feedback to become eligible for a subscription."
                         }
                     </p>
@@ -162,13 +163,11 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
         );
     }
     
-    // The original subscription card UI is returned only if the profile is approved
     return (
         <>
-            {/* Added strategy="afterInteractive" for better Next.js hydration */}
             <Script src="https://sdk.cashfree.com/js/v3/cashfree.js" onLoad={() => setIsSDKReady(true)} strategy="afterInteractive" />
             <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
-                {!isSubscribed && ( // Show OFF tag only if not subscribed
+                {!isSubscribed && (
                     <div className="absolute top-0 right-0 h-24 w-24">
                         <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
                             OFF
@@ -192,7 +191,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                         <p className="text-gray-300 text-sm sm:text-base">per month</p>
                     </div>
                 )}
-                {!isSubscribed && ( // Show LIMITED TIME OFFER only if not subscribed
+                {!isSubscribed && (
                     <div className="text-center mb-6 sm:mb-8">
                         <p className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full inline-block font-semibold text-sm">
                             LIMITED TIME OFFER
@@ -387,7 +386,7 @@ export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user
                 mobileNumber: mobileNumberToSave,
                 email: user.email,
                 userId: user.uid,
-                accountType: 'normal', // Ensure accountType is normal if it's the normal profile
+                accountType: 'normal',
                 updatedAt: serverTimestamp(),
             };
             if (!userData || !userData.createdAt) {
@@ -406,7 +405,7 @@ export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user
         }
     };
 
-    if (!user) { // Ensure user is available before attempting to render anything
+    if (!user) {
         return null;
     }
 
@@ -552,16 +551,14 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                 await uploadBytes(imageRef, image);
                 imageUrl = await getDownloadURL(imageRef);
             }
-            // All applications now bypass subscription logic and directly submit/update
+            
             const dataToSend = {
                 ...formData,
                 profilePictureUrl: imageUrl,
                 userId: user.uid,
-                status: existingApplication?.status || "pending", // Keep existing status on update, default to pending
+                status: existingApplication?.status || "pending",
                 timestamp: existingApplication?.timestamp || serverTimestamp(),
                 updatedAt: serverTimestamp(),
-                // Do NOT set subscriptionStatus or subscriptionExpiresAt here directly from the form.
-                // These are managed by the payment flow and server-side verification.
             };
 
             if (existingApplication) {
@@ -968,10 +965,9 @@ function CreatorDashboard() {
     const [creatorData, setCreatorData] = useState<ApplicationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile'); // Default to profile for new users
+    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile');
 
 
-    // Effect for User Data, Creator Data & Account Type
     useEffect(() => {
         if (!user) {
             setLoading(false);
@@ -986,7 +982,6 @@ function CreatorDashboard() {
                 fetchedUserData = userSnap.data() as UserData;
                 setUserData(fetchedUserData);
 
-                // Check subscription expiry
                 if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt) {
                     const now = new Date();
                     const expiryDate = fetchedUserData.subscriptionExpiresAt.toDate();
@@ -996,16 +991,14 @@ function CreatorDashboard() {
                             subscriptionStatus: 'inactive',
                             updatedAt: serverTimestamp(),
                         });
-                        fetchedUserData.subscriptionStatus = 'inactive'; // Update local state immediately
+                        fetchedUserData.subscriptionStatus = 'inactive';
                     }
                 }
 
-                // If user data exists and mobile number is missing, set initial view to profile
                 if (!fetchedUserData.mobileNumber) {
                     setView('profile');
                 }
             } else {
-                // Create a basic user doc if it doesn't exist
                 const initialData = {
                     userId: user.uid,
                     email: user.email,
@@ -1017,36 +1010,23 @@ function CreatorDashboard() {
                 await setDoc(userDocRef, initialData, { merge: true });
                 fetchedUserData = initialData as UserData;
                 setUserData(initialData as UserData);
-                setView('profile'); // New user, prompt for profile completion
+                setView('profile');
             }
 
-            // Now fetch creator application data
             const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
             const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
-                let fetchedCreatorData: ApplicationData | null = null;
                 if (!snapshot.empty) {
                     const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
-                    fetchedCreatorData = data;
                     setCreatorData(data);
 
-                    // Update user's accountType to 'creator' if it's not already
                     if (fetchedUserData?.accountType !== 'creator') {
-                        try {
-                            await setDoc(userDocRef, {
-                                accountType: 'creator',
-                                creatorApplicationId: data.id,
-                                // subscriptionStatus: data.subscriptionStatus, // Removed direct sync from application here
-                                // subscriptionExpiresAt: data.subscriptionExpiresAt, // Removed direct sync from application here
-                            }, { merge: true });
-                        } catch (error) {
-                            console.error("Error updating user account type to creator:", error);
-                        }
+                        await setDoc(userDocRef, { accountType: 'creator' }, { merge: true });
                     }
-                    // If creator application exists and approved, default view to dashboard
+                    
                     if (data.status === 'approved') {
                         setView('dashboard');
                     } else {
-                        setView('applicationForm'); // If not approved, show application form/status
+                        setView('applicationForm');
                     }
 
 
@@ -1063,19 +1043,14 @@ function CreatorDashboard() {
 
                 } else {
                     setCreatorData(null);
-                    // Update user's accountType to 'normal' if it's not already
                     if (fetchedUserData?.accountType !== 'normal') {
-                        try {
-                            await setDoc(userDocRef, { accountType: 'normal', creatorApplicationId: FieldValue.delete() }, { merge: true });
-                        } catch (error) {
-                            console.error("Error updating user account type to normal:", error);
-                        }
+                        await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
                     }
-                    // If no creator application, ensure view is profile or application form
-                    if (!fetchedUserData?.mobileNumber) { // Prioritize mobile number prompt
+                    
+                    if (!fetchedUserData?.mobileNumber) {
                         setView('profile');
                     } else {
-                        setView('applicationForm'); // Default to application form for normal users
+                        setView('applicationForm');
                     }
                 }
                 setLoading(false);
@@ -1084,13 +1059,13 @@ function CreatorDashboard() {
                 setLoading(false);
             });
 
-            return () => unsubscribeCreator(); // Cleanup for creator snapshot
+            return () => unsubscribeCreator();
         }, (error) => {
             console.error("Error fetching user data:", error);
             setLoading(false);
         });
 
-        return () => unsubscribeUser(); // Cleanup for user snapshot
+        return () => unsubscribeUser();
     }, [user, router]);
 
     const handleMobileNumberSave = async (mobileNumber: string) => {
@@ -1098,13 +1073,12 @@ function CreatorDashboard() {
         const userDocRef = doc(db, "users", user.uid);
         try {
             await updateDoc(userDocRef, { mobileNumber: mobileNumber, updatedAt: serverTimestamp() });
-            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null); // Update local state
-            // After saving mobile, if a creator application already exists and is approved, go to dashboard
-            // Otherwise, if no creator application exists, guide to the application form
+            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null);
+            
             if (creatorData && creatorData.status === 'approved') {
                 setView('dashboard');
             } else {
-                setView('applicationForm'); // Direct to application form after saving mobile number
+                setView('applicationForm');
             }
         } catch (error) {
             console.error("Failed to save mobile number from prompt:", error);
@@ -1121,26 +1095,15 @@ function CreatorDashboard() {
         );
     }
 
-    if (!user) {
-        // Redirection handled by useEffect
+    if (!user || !userData) {
         return null;
-    }
-
-    // Ensure userData is available before rendering main content
-    if (!userData) {
-        return (
-            <div className="flex justify-center items-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-600"></div>
-                <p className="ml-3 text-gray-700">Fetching user data...</p>
-            </div>
-        );
     }
 
     const isUserSubscribed = userData?.subscriptionStatus === 'active' &&
         (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
 
     const renderMainContent = () => {
-        if (userData?.mobileNumber === undefined || userData.mobileNumber === null || userData.mobileNumber === '') {
+        if (!userData.mobileNumber) {
             return <NormalUserProfile user={user} userData={userData} onMobileNumberSave={handleMobileNumberSave} />;
         }
 
@@ -1160,7 +1123,6 @@ function CreatorDashboard() {
 
                     return (
                         <>
-                            {/* Creator Profile Summary */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
                                     <Image
@@ -1207,7 +1169,6 @@ function CreatorDashboard() {
                                 </div>
                             </div>
 
-                            {/* Application Status (for creators) */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
                                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${statusDisplay.bgColor} ${statusDisplay.color}`}>
@@ -1222,7 +1183,6 @@ function CreatorDashboard() {
                                 )}
                             </div>
 
-                            {/* Recent Activity (for creators) */}
                             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                                 <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
                                 <ul className="space-y-4">
@@ -1251,7 +1211,6 @@ function CreatorDashboard() {
 
     return (
         <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
-            {/* Conditional Creator Pro Banner (only for creators) */}
             {creatorData && (
                 <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-6 sm:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
                     <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/5 rounded-full filter blur-2xl"></div>
@@ -1279,9 +1238,7 @@ function CreatorDashboard() {
 
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Content Area (Left/Two-thirds) */}
                 <div className="lg:col-span-2 space-y-8">
-                    {/* Dashboard Header/Navigation */}
                     <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome, {userData.fullName || 'User'}!</h2>
@@ -1302,7 +1259,7 @@ function CreatorDashboard() {
                             >
                                 <DocumentTextIcon className="h-5 w-5"/> <span className="hidden sm:inline">Application</span>
                             </button>
-                            {creatorData?.status === 'approved' && ( // Only show dashboard view button if approved creator
+                            {creatorData?.status === 'approved' && (
                                 <button
                                     onClick={() => setView('dashboard')}
                                     className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'dashboard' && creatorData?.status === 'approved' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -1316,12 +1273,11 @@ function CreatorDashboard() {
                         </div>
                     </div>
 
-                    {renderMainContent()} {/* Render the selected component here */}
+                    {renderMainContent()}
                 </div>
 
-                {/* Subscription Card (Right/One-third) */}
                 <div className="lg:col-span-1">
-                    {user && userData && ( // Ensure user and userData are not null
+                    {user && userData && (
                         <SubscriptionCard 
                             user={user} 
                             userData={userData} 

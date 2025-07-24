@@ -128,8 +128,8 @@ export const metadata: Metadata = {
 
 // Viewport for theme and color scheme (moved here)
 export const viewport: Viewport = {
-  themeColor: "#4B0082", // A dominant color from your brand (e.g., a shade of purple)
-  colorScheme: "light dark", // Indicate support for both light and dark modes
+  themeColor: "#4B0082", // This is your purple theme color
+  colorScheme: "light",
 };
 
 export default function RootLayout({

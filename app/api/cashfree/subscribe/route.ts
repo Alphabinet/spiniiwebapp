@@ -2,6 +2,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase/admin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { z } from 'zod'; // Import Zod for validation
+
+// Define a strict schema for the incoming request body.
+// This ensures all required fields are present and correctly formatted.
+const subscribeSchema = z.object({
+    userId: z.string().min(1, "User ID cannot be empty."),
+    userName: z.string().min(2, "A full name is required."),
+    userEmail: z.string().email("A valid email address is required."),
+    // This regex validates a standard 10-digit Indian mobile number.
+    userPhone: z.string().regex(/^[6-9]\d{9}$/, "A valid 10-digit mobile number is required."),
+    plan: z.object({
+        name: z.string().min(1, "Plan name is required."),
+        amount: z.number().positive("Plan amount must be a positive number."),
+    }),
+});
+
 
 export async function POST(req: NextRequest) {
     try {
@@ -11,25 +27,32 @@ export async function POST(req: NextRequest) {
         }
 
         // 1. Verify user's identity from token
-        let decodedToken;
         try {
-            decodedToken = await adminAuth.verifyIdToken(token);
+            await adminAuth.verifyIdToken(token);
         } catch (error) {
             console.error("Firebase ID Token verification failed:", error);
             return NextResponse.json({ success: false, message: 'Unauthorized: Invalid token' }, { status: 401 });
         }
 
-        // 2. Get required data from request body
-        const { userEmail, userName, userPhone, plan, userId } = await req.json();
+        // 2. Parse and VALIDATE the request body using the Zod schema
+        const body = await req.json();
+        const validation = subscribeSchema.safeParse(body);
 
-        if (!userEmail || !userName || !userPhone || !plan || !userId) {
-            return NextResponse.json({ success: false, message: 'Missing required fields.' }, { status: 400 });
+        if (!validation.success) {
+            // If validation fails, return a specific error message from Zod.
+            return NextResponse.json({
+                success: false,
+                message: validation.error.errors[0].message, // e.g., "A valid 10-digit mobile number is required."
+            }, { status: 400 });
         }
+
+        // Use the validated data from this point forward
+        const { userEmail, userName, userPhone, plan, userId } = validation.data;
 
         // 3. Get Cashfree credentials from environment variables
         const appId = process.env.CASHFREE_APP_ID;
         const secretKey = process.env.CASHFREE_SECRET_KEY;
-        const apiUrl = process.env.CASHFREE_API_URL; // No fallback to sandbox
+        const apiUrl = process.env.CASHFREE_API_URL;
 
         if (!appId || !secretKey || !apiUrl) {
             console.error("Cashfree environment variables not set!");
@@ -41,15 +64,14 @@ export async function POST(req: NextRequest) {
         const orderAmount = plan.amount;
         const orderCurrency = "INR";
 
-        // 5. **Best Practice:** Create a PENDING order document in Firestore first.
-        // This ensures you have a record of the attempt, even if the Cashfree API call fails.
+        // 5. Create a PENDING order document in Firestore first.
         const orderDocRef = adminDb.collection("orders").doc(orderId);
         await orderDocRef.set({
             userId: userId,
             planName: plan.name,
             amount: orderAmount,
             currency: orderCurrency,
-            status: 'PENDING', // Initial status
+            status: 'PENDING',
             createdAt: FieldValue.serverTimestamp(),
         });
 
@@ -68,7 +90,6 @@ export async function POST(req: NextRequest) {
                 return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?order_id={order_id}`,
                 notify_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/cashfree/webhook`,
             },
-            payment_methods: ["cc", "dc", "upi", "netbanking"]
         };
 
         // 7. Call Cashfree to create the order
@@ -87,7 +108,6 @@ export async function POST(req: NextRequest) {
 
         // 8. Handle response
         if (cfResponse.ok && cfData.payment_session_id) {
-            // If successful, update the order document with Cashfree's details
             await orderDocRef.update({
                 cashfreeOrderId: cfData.cf_order_id,
                 paymentSessionId: cfData.payment_session_id,
@@ -100,7 +120,6 @@ export async function POST(req: NextRequest) {
                 order_id: orderId,
             });
         } else {
-            // If Cashfree fails, update the order to reflect the failure
             console.error("Cashfree order creation failed:", cfData);
             await orderDocRef.update({
                 status: 'FAILED',
@@ -110,7 +129,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
                 success: false,
                 message: cfData.message || 'Failed to create payment session with Cashfree.',
-                code: cfData.code || 'cashfree_order_creation_failed'
             }, { status: cfResponse.status || 500 });
         }
 
