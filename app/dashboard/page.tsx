@@ -73,14 +73,26 @@ interface Activity {
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
-    const [isSDKReady, setIsSDKReady] = useState(false); // <-- State for SDK readiness
+    const [isSDKReady, setIsSDKReady] = useState(false);
+    const [sdkError, setSdkError] = useState(false); // New state for SDK load error
+
+    // Check if the Cashfree object is already available on mount
+    useEffect(() => {
+        if (typeof window !== 'undefined' && (window as any).Cashfree) {
+            setIsSDKReady(true);
+        }
+    }, []);
 
     const plan = { name: "Creator Pro Monthly", amount: 1.00 };
     const isProfileApproved = creatorApplication?.status === 'approved';
 
     const handlePurchase = async () => {
         if (!isSDKReady) {
-            setMessage('Payment SDK is not ready yet. Please wait a moment.');
+            if (sdkError) {
+                setMessage('Payment SDK failed to load. Please refresh the page.');
+            } else {
+                setMessage('Payment SDK is not ready yet. Please wait a moment.');
+            }
             return;
         }
         if (!userData?.fullName || userData.fullName.length < 2) {
@@ -137,7 +149,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     if (!isProfileApproved) {
         return (
             <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
-                 <div className="text-center">
+                <div className="text-center">
                     <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
                     <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
                 </div>
@@ -159,13 +171,19 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     
     return (
         <>
-            {/* Re-add the Script tag to load the SDK */}
             <Script
                 src={process.env.NEXT_PUBLIC_CASHFREE_MODE === 'sandbox'
                     ? "https://sdk.cashfree.com/js/v3/cashfree-sbox.sdk.min.js"
                     : "https://sdk.cashfree.com/js/v3/cashfree.sdk.min.js"
                 }
-                onLoad={() => setIsSDKReady(true)}
+                onLoad={() => {
+                    setIsSDKReady(true);
+                    setSdkError(false);
+                }}
+                onError={() => {
+                    setSdkError(true);
+                    setIsSDKReady(false);
+                }}
                 strategy="lazyOnload"
             />
             <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
@@ -213,13 +231,15 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     disabled={!isSDKReady || loading || isSubscribed}
                     className="w-full text-center px-6 py-3 sm:py-4 bg-gradient-to-b from-yellow-400 to-amber-500 text-zinc-900 rounded-lg font-bold hover:from-yellow-500 hover:to-amber-600 transition-transform transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-base sm:text-lg"
                 >
-                    {!isSDKReady
-                        ? "Initializing Payment..."
-                        : loading
-                        ? "Processing..."
-                        : isSubscribed
-                        ? "Subscribed"
-                        : "Get Started"
+                    {sdkError
+                        ? "SDK Load Failed"
+                        : !isSDKReady
+                            ? "Initializing Payment..."
+                            : loading
+                                ? "Processing..."
+                                : isSubscribed
+                                    ? "Subscribed"
+                                    : "Get Started"
                     }
                 </button>
                 {message && <p className={`text-center mt-4 text-sm ${isSubscribed ? 'text-green-100' : 'text-red-400'}`}>{message}</p>}
@@ -232,6 +252,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     );
 }
 
+// ... rest of file (no changes to other components) ...
 
 // ===== Success Modal Component (No Changes) =====
 function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
@@ -1025,7 +1046,7 @@ function CreatorDashboard() {
     if (!isProfileComplete) {
         return (
             <div className="container mx-auto px-4 py-8 max-w-4xl">
-                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-8">
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-8">
                     <div className="flex">
                         <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zM9 5v6h2V5H9zm0 8h2v-2H9v2z"/></svg></div>
                         <div>
@@ -1098,16 +1119,16 @@ function CreatorDashboard() {
                 } else {
                     // --- NORMAL USER'S DASHBOARD VIEW ---
                     return (
-                         <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
+                        <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
                             <SparklesIcon className="w-16 h-16 mx-auto text-purple-500 mb-4"/>
                             <h2 className="text-2xl font-bold text-gray-900">Ready to Become a Creator?</h2>
                             <p className="text-gray-600 mt-2 mb-6 max-w-xl mx-auto">
                                 Join our exclusive network of influencers and start collaborating with amazing brands. Apply today to unlock new opportunities!
                             </p>
-                             <button onClick={() => setView('applicationForm')} className="inline-flex items-center justify-center px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold text-base hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg cursor-pointer gap-2">
-                                 Become a Creator Now
+                            <button onClick={() => setView('applicationForm')} className="inline-flex items-center justify-center px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold text-base hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg cursor-pointer gap-2">
+                                Become a Creator Now
                             </button>
-                         </div>
+                        </div>
                     )
                 }
         }
@@ -1144,7 +1165,7 @@ function CreatorDashboard() {
                     >
                         <UserCircleIcon className="h-5 w-5"/> <span className="hidden sm:inline">My Profile</span>
                     </button>
-                     {/* Creator Application View (Always available) */}
+                    {/* Creator Application View (Always available) */}
                     <button
                         onClick={() => setView('applicationForm')}
                         className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'applicationForm' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
