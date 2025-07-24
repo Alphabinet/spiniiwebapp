@@ -18,7 +18,7 @@ import {
 import Image from "next/image";
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import Script from 'next/script'; // <-- Re-added Script component
+import Script from 'next/script';
 
 // --- Type Definitions ---
 interface ApplicationData {
@@ -58,7 +58,7 @@ interface UserData {
     userId?: string;
     accountType?: 'normal' | 'creator';
     updatedAt?: Timestamp | FieldValue;
-    createdAt?: Timestamp | FieldValue;
+    createdAt?: Timestamp | FieldData;
     subscriptionStatus?: 'active' | 'inactive';
     subscriptionExpiresAt?: Timestamp;
 }
@@ -69,14 +69,13 @@ interface Activity {
     time: string;
 }
 
-// ===== Subscription Component (Reverted to SDK Method) =====
+// ===== Subscription Component =====
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [isSDKReady, setIsSDKReady] = useState(false);
-    const [sdkError, setSdkError] = useState(false); // New state for SDK load error
+    const [sdkError, setSdkError] = useState(false);
 
-    // Check if the Cashfree object is already available on mount
     useEffect(() => {
         if (typeof window !== 'undefined' && (window as any).Cashfree) {
             setIsSDKReady(true);
@@ -126,7 +125,6 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
             const data = await response.json();
 
             if (data.success && data.payment_session_id) {
-                // Use the SDK to open the checkout modal
                 const cashfree = (window as any).Cashfree({ mode: process.env.NEXT_PUBLIC_CASHFREE_MODE === 'sandbox' ? 'sandbox' : 'production' });
                 cashfree.checkout({
                     paymentSessionId: data.payment_session_id,
@@ -171,8 +169,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
 
     return (
         <>
-            <Script
-                src="https://sdk.cashfree.com/js/v3/cashfree.sdk.min.js"
+           <Script src="https://sdk.cashfree.com/js/v3/cashfree.js"
                 onLoad={() => {
                     setIsSDKReady(true);
                     setSdkError(false);
@@ -181,7 +178,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     setSdkError(true);
                     setIsSDKReady(false);
                 }}
-                strategy="lazyOnload"
+                strategy="afterInteractive"
             />
             <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
                 {!isSubscribed && (
@@ -249,9 +246,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     );
 }
 
-// ... rest of file (no changes to other components) ...
-
-// ===== Success Modal Component (No Changes) =====
+// ===== Success Modal Component =====
 function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
     if (!isOpen) return null;
 
@@ -278,7 +273,7 @@ function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
     );
 }
 
-// --- Helper Components & Functions (No Changes) ---
+// --- Helper Components & Functions ---
 
 const formatDate = (timestamp: Timestamp | null | undefined) => {
     if (!timestamp) return "N/A";
@@ -450,7 +445,6 @@ export function PersonalInformationForm({ user, userData, isMandatory }: { user:
     );
 }
 
-// ===== Application Form (Updated to auto-fill) =====
 interface ApplicationFormProps {
     user: FirebaseUser | null | undefined;
     userData: UserData | null; // <-- Added userData prop
@@ -480,7 +474,6 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
         deliveryDuration: existingApplication?.deliveryDuration || "",
     });
 
-    // ... rest of the ApplicationForm component is unchanged ...
     const [image, setImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | ArrayBuffer | null>(
         existingApplication?.profilePictureUrl || null
@@ -490,7 +483,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | React.ChangeEvent<HTMLSelectElement> | React.ChangeEvent<HTMLTextAreaElement>>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
         if (errors[name]) { setErrors(prev => ({ ...prev, [name]: "" })); }
@@ -604,7 +597,6 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
-                    {/* The rest of the form JSX is unchanged */}
                     <div className="space-y-4 sm:space-y-6">
                         <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-b pb-2">Personal Details</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -794,7 +786,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
     );
 }
 
-// ===== Application Status Component (No changes)=====
+// ===== Application Status Component =====
 export function ApplicationStatus({ application }: { application: ApplicationData | null }) {
     if (!application) {
         return (
@@ -970,6 +962,7 @@ function CreatorDashboard() {
     // Effect for fetching all user-related data
     useEffect(() => {
         if (!user) {
+            setLoading(false); // Set loading to false before redirect
             router.push('/login');
             return;
         }
@@ -979,6 +972,35 @@ function CreatorDashboard() {
             if (userSnap.exists()) {
                 const fetchedUserData = userSnap.data() as UserData;
                 setUserData(fetchedUserData);
+
+                // Check for subscription expiry
+                if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt) {
+                    const now = new Date();
+                    const expiryDate = fetchedUserData.subscriptionExpiresAt.toDate();
+                    if (now > expiryDate) {
+                        console.log("Subscription expired. Setting to inactive.");
+                        updateDoc(userDocRef, {
+                            subscriptionStatus: 'inactive',
+                            updatedAt: serverTimestamp(),
+                        });
+                        // Update local state immediately for responsiveness
+                        setUserData(prev => prev ? { ...prev, subscriptionStatus: 'inactive' } : null);
+                    }
+                }
+
+                // If personal info is incomplete, force 'profile' view
+                const isProfileComplete = !!(fetchedUserData.fullName && fetchedUserData.mobileNumber && fetchedUserData.cityState && fetchedUserData.gender);
+                if (!isProfileComplete) {
+                    setView('profile');
+                } else if (!creatorData && fetchedUserData.accountType !== 'creator') {
+                    // If no creator data and user is not already a creator, default to applicationForm
+                    setView('applicationForm');
+                } else if (creatorData?.status === 'approved') {
+                    setView('dashboard');
+                } else {
+                    setView('applicationForm');
+                }
+
             } else {
                 // If user document doesn't exist, create a basic one
                 const initialData: UserData = {
@@ -989,9 +1011,14 @@ function CreatorDashboard() {
                     accountType: 'normal',
                     subscriptionStatus: 'inactive',
                 };
-                setDoc(userDocRef, initialData);
+                setDoc(userDocRef, initialData, { merge: true }); // Use merge:true to avoid overwriting if partial data exists
                 setUserData(initialData);
+                setView('profile'); // New users always start at profile to complete info
             }
+            setLoading(false); // Set loading to false once initial user data is fetched
+        }, (error) => {
+            console.error("Error fetching user data:", error);
+            setLoading(false);
         });
 
         const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
@@ -1000,20 +1027,43 @@ function CreatorDashboard() {
                 const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
                 setCreatorData(data);
                 // Ensure user accountType is 'creator' in their user doc
-                await setDoc(doc(db, "users", user.uid), { accountType: 'creator' }, { merge: true });
+                if (userData?.accountType !== 'creator') { // Only update if it's different
+                    await setDoc(doc(db, "users", user.uid), { accountType: 'creator' }, { merge: true });
+                }
 
                 const activities: Activity[] = [];
                 if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
                 if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
                     activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
+                } else if (data.updatedAt && !data.timestamp) { // Handle case where timestamp might be missing but updatedAt exists
+                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
                 }
                 if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
                 setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
 
+                // Set view based on creator application status if user profile is complete
+                if (userData?.fullName && userData?.mobileNumber && userData?.cityState && userData?.gender) {
+                    if (data.status === 'approved') {
+                        setView('dashboard');
+                    } else {
+                        setView('applicationForm');
+                    }
+                }
+
             } else {
                 setCreatorData(null);
-                await setDoc(doc(db, "users", user.uid), { accountType: 'normal' }, { merge: true });
+                // Ensure user accountType is 'normal' if no creator application exists
+                if (userData?.accountType !== 'normal') { // Only update if it's different
+                    await setDoc(doc(db, "users", user.uid), { accountType: 'normal' }, { merge: true });
+                }
+                // If personal profile is complete, and no creator app, default to application form
+                if (userData?.fullName && userData?.mobileNumber && userData?.cityState && userData?.gender) {
+                    setView('applicationForm');
+                }
             }
+            setLoading(false); // Set loading to false once creator data is fetched
+        }, (error) => {
+            console.error("Error fetching creator data:", error);
             setLoading(false);
         });
 
@@ -1021,7 +1071,7 @@ function CreatorDashboard() {
             unsubscribeUser();
             unsubscribeCreator();
         };
-    }, [user, router]);
+    }, [user, router, userData?.fullName, userData?.mobileNumber, userData?.cityState, userData?.gender, userData?.accountType, creatorData]);
 
 
     if (loading) {
@@ -1033,7 +1083,7 @@ function CreatorDashboard() {
     }
 
     if (!user || !userData) {
-        return null; // Or a redirect component
+        return null;
     }
 
     // --- Core Logic: Check if personal information is complete ---
@@ -1070,8 +1120,8 @@ function CreatorDashboard() {
 
             case 'dashboard':
             default:
-                if (creatorData) {
-                    // --- CREATOR'S DASHBOARD VIEW ---
+                if (creatorData && creatorData.status === 'approved') {
+                    // --- CREATOR'S DASHBOARD VIEW (when approved) ---
                     const statusDisplay = {
                         "approved": { text: "Approved", color: "text-green-700", bgColor: "bg-green-100" },
                         "rejected": { text: "Rejected", color: "text-red-700", bgColor: "bg-red-100" },
@@ -1111,9 +1161,55 @@ function CreatorDashboard() {
                                     <InfoCard title="Avg. Story Views" value={creatorData.storyAverageViews || 'N/A'} icon={<EyeIcon className="w-6 h-6" />} />
                                 </div>
                             </div>
+
+                            {/* Application Status */}
+                            <ApplicationStatus application={creatorData} />
+
+                            {/* Recent Activity */}
+                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
+                                <ul className="space-y-4">
+                                    {recentActivity.length > 0 ?
+                                        recentActivity.map((activity, index) => (
+                                            <li key={index} className="flex items-center gap-4">
+                                                <ActivityIcon type={activity.type} />
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-800">{activity.description}</p>
+                                                    <p className="text-xs text-gray-500">{activity.time}</p>
+                                                </div>
+                                            </li>
+                                        )) : (
+                                            <p className="text-sm text-gray-500">No recent activity.</p>
+                                        )}
+                                </ul>
+                            </div>
                         </>
                     );
-                } else {
+                } else if (creatorData && (creatorData.status === 'pending' || creatorData.status === 'rejected')) {
+                    // --- CREATOR'S DASHBOARD VIEW (when pending/rejected) ---
+                    return (
+                        <>
+                            {/* Application Status */}
+                            <ApplicationStatus application={creatorData} />
+
+                            {/* Prompt to manage application */}
+                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
+                                <DocumentTextIcon className="w-16 h-16 mx-auto text-purple-500 mb-4" />
+                                <h2 className="text-2xl font-bold text-gray-900">Your Application Status</h2>
+                                <p className="text-gray-600 mt-2 mb-6 max-w-xl mx-auto">
+                                    {creatorData.status === 'pending' ?
+                                        "Your creator application is currently under review. We'll notify you once a decision is made." :
+                                        "Your creator application was not approved. Please review the feedback and update your profile."
+                                    }
+                                </p>
+                                <button onClick={() => setView('applicationForm')} className="inline-flex items-center justify-center px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold text-base hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg cursor-pointer gap-2">
+                                    <PencilSquareIcon className="w-5 h-5" /> Manage Application
+                                </button>
+                            </div>
+                        </>
+                    );
+                }
+                else {
                     // --- NORMAL USER'S DASHBOARD VIEW ---
                     return (
                         <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">

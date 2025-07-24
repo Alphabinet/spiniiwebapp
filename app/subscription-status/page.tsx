@@ -1,22 +1,22 @@
+// app/subscription-status/page.tsx
 "use client";
 
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import Link from 'next/link';
 
 function StatusContent() {
     const searchParams = useSearchParams();
-    // **FIX**: Read 'order_id' from the URL to match the backend
+    const router = useRouter();
     const order_id = searchParams.get('order_id');
     const [status, setStatus] = useState<'processing' | 'success' | 'failed'>('processing');
     const [message, setMessage] = useState('Verifying your payment, please wait...');
 
     useEffect(() => {
-        // **FIX**: Check for order_id
         if (!order_id) {
             setStatus('failed');
-            setMessage('No Order ID found. Invalid request.');
+            setMessage('No order ID found. Invalid request.');
             return;
         }
 
@@ -25,7 +25,6 @@ function StatusContent() {
                 const response = await fetch('/api/cashfree/verify-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // **FIX**: Send order_id in the body
                     body: JSON.stringify({ order_id }),
                 });
 
@@ -36,7 +35,7 @@ function StatusContent() {
                     setMessage('Your subscription is now active!');
                 } else {
                     setStatus('failed');
-                    setMessage(data.message || `Payment status: ${data.status || 'Failed'}. Please contact support.`);
+                    setMessage(data.message || 'Payment verification failed. Please contact support.');
                 }
             } catch (error) {
                 setStatus('failed');
@@ -44,7 +43,7 @@ function StatusContent() {
             }
         };
 
-        // Delay verification slightly to allow for backend processing
+        // Delay verification slightly to allow for webhook processing
         const timer = setTimeout(verifyPayment, 3000);
         return () => clearTimeout(timer);
 
@@ -60,9 +59,9 @@ function StatusContent() {
                     </>
                 )}
                 {status === 'success' && (
-                       <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 mb-6">
-                           <CheckCircleIcon className="h-12 w-12 text-green-600" />
-                       </div>
+                     <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 mb-6">
+                        <CheckCircleIcon className="h-12 w-12 text-green-600" />
+                    </div>
                 )}
                 {status === 'failed' && (
                     <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
@@ -71,18 +70,19 @@ function StatusContent() {
                 )}
                 <p className="text-gray-600 text-lg">{message}</p>
                  {status !== 'processing' && (
-                     <Link href="/creator-dashboard" className="inline-block mt-6 px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
-                         Go to Dashboard
-                     </Link>
+                    <Link href="/dashboard" className="inline-block mt-6 px-8 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700">
+                        Go to Dashboard
+                    </Link>
                  )}
             </div>
         </div>
     );
 }
 
+
 export default function SubscriptionStatusPage() {
     return (
-        <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
             <StatusContent />
         </Suspense>
     );
