@@ -5,46 +5,35 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
-// Define the expected shape of the incoming request body with Zod
 const subscribeSchema = z.object({
   userId: z.string().min(1, "User ID is required"),
-  userName: z.string().min(2, "Full name is required and must be at least 2 characters."),
+  userName: z.string().min(2, "Full name must be at least 2 characters."),
   userEmail: z.string().email("A valid email is required"),
-  // Using a regex for Indian mobile numbers
   userPhone: z.string().regex(/^[6-9]\d{9}$/, "A valid 10-digit Indian mobile number is required."),
   plan: z.object({
     name: z.string(),
-    amount: z.number().positive("Amount must be positive"),
+    amount: z.number().positive(),
   }),
 });
 
 export async function POST(req: NextRequest) {
+    if (!adminDb) {
+        console.error("CRITICAL: Firebase Admin SDK is not initialized.");
+        return NextResponse.json({ success: false, message: 'Server configuration error.' }, { status: 500 });
+    }
+
     try {
         const token = req.headers.get('Authorization')?.split('Bearer ')[1];
         if (!token) {
-            return NextResponse.json({ success: false, message: 'Unauthorized: No token provided.' }, { status: 401 });
+            return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
         }
-
-        // 1. Verify user's identity from token
-        let decodedToken;
-        try {
-            decodedToken = await adminAuth.verifyIdToken(token);
-        } catch (error) {
-            console.error("Firebase ID Token verification failed:", error);
-            return NextResponse.json({ success: false, message: 'Unauthorized: Invalid token.' }, { status: 401 });
-        }
+        await adminAuth.verifyIdToken(token);
         
         const body = await req.json();
-        
-        // 2. Validate the request body using Zod
-        const validationResult = subscribeSchema.safeParse(body);
-        if (!validationResult.success) {
-            return NextResponse.json({ success: false, message: validationResult.error.errors[0].message }, { status: 400 });
-        }
+        const validatedData = subscribeSchema.parse(body);
 
-        const { userEmail, userName, userPhone, plan, userId } = validationResult.data;
-        
-        // 3. Get Cashfree credentials from environment variables
+        const { userId, userName, userEmail, userPhone, plan } = validatedData;
+
         const appId = process.env.CASHFREE_APP_ID;
         const secretKey = process.env.CASHFREE_SECRET_KEY;
         const apiUrl = process.env.CASHFREE_API_URL;
@@ -54,11 +43,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: 'Payment gateway not configured.' }, { status: 500 });
         }
 
-        // 4. Prepare link details
-        const linkId = `link_${uuidv4()}`;
+        const orderId = `order_${uuidv4()}`;
         
-        // 5. Create a PENDING order document in Firestore first.
-        const orderDocRef = adminDb.collection("orders").doc(linkId);
+        const orderDocRef = adminDb.collection("orders").doc(orderId);
         await orderDocRef.set({
             userId: userId,
             planName: plan.name,
@@ -68,33 +55,26 @@ export async function POST(req: NextRequest) {
             createdAt: FieldValue.serverTimestamp(),
         });
 
-        // 6. Prepare payload for Cashfree Payment Link API
         const cashfreeRequest = {
-            link_id: linkId,
-            link_amount: plan.amount,
-            link_currency: "INR",
-            link_purpose: `Subscription for ${plan.name}`,
+            order_id: orderId,
+            order_amount: plan.amount,
+            order_currency: "INR",
             customer_details: {
-                customer_phone: userPhone,
-                customer_email: userEmail,
+                customer_id: userId,
                 customer_name: userName,
+                customer_email: userEmail,
+                customer_phone: userPhone,
             },
-            link_notify: {
-                send_sms: true,
-                send_email: true,
-            },
-            link_meta: {
-                return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?link_id={link_id}`,
-                notify_url: `${process.env.NEXT_PUBLIC_BASE_URL}/api/cashfree/webhook`,
+            order_meta: {
+                return_url: `${process.env.NEXT_PUBLIC_BASE_URL}/subscription-status?order_id={order_id}`,
             },
         };
 
-        // 7. Call Cashfree to create the payment link
-        const cfResponse = await fetch(`${apiUrl}/links`, { // <-- IMPORTANT: Using /links endpoint
+        const cfResponse = await fetch(`${apiUrl}/orders`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-version': '2023-08-01', // Use the latest recommended version for links
+                'x-api-version': '2022-09-01', // Use the version for Orders API
                 'x-client-id': appId,
                 'x-client-secret': secretKey,
             },
@@ -103,33 +83,34 @@ export async function POST(req: NextRequest) {
 
         const cfData = await cfResponse.json();
 
-        // 8. Handle response from Cashfree
-        if (cfResponse.ok && cfData.link_url) {
+        if (cfResponse.ok && cfData.payment_session_id) {
             await orderDocRef.update({
-                cashfreeLinkId: cfData.link_id,
-                paymentLink: cfData.link_url,
+                cashfreeOrderId: cfData.order_id,
+                paymentSessionId: cfData.payment_session_id,
             });
 
             return NextResponse.json({
                 success: true,
-                message: 'Payment link created.',
-                payment_link: cfData.link_url, // <-- Send this back to the frontend
+                message: 'Payment session created.',
+                // **CRITICAL CHANGE**: Use the payment_url from the order for redirect
+                payment_link: cfData.order_meta.payment_url, 
             });
         } else {
-            console.error("Cashfree link creation failed:", cfData);
+            console.error("Cashfree order creation failed:", cfData);
             await orderDocRef.update({
                 status: 'FAILED',
                 paymentError: cfData,
             });
-
             return NextResponse.json({
                 success: false,
-                message: cfData.message || 'Failed to create payment link with Cashfree.',
+                message: cfData.message || 'Failed to create payment session.',
             }, { status: cfResponse.status || 500 });
         }
-
     } catch (error: any) {
         console.error("API error in /api/cashfree/subscribe:", error);
-        return NextResponse.json({ success: false, message: 'Internal server error.', error: error.message }, { status: 500 });
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ success: false, message: error.errors[0].message }, { status: 400 });
+        }
+        return NextResponse.json({ success: false, message: 'Internal server error.' }, { status: 500 });
     }
 }

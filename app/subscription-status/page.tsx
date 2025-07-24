@@ -7,16 +7,16 @@ import Link from 'next/link';
 
 function StatusContent() {
     const searchParams = useSearchParams();
-    // **FIX**: Read 'link_id' from the URL, not 'order_id'
-    const link_id = searchParams.get('link_id');
+    // **FIX**: Read 'order_id' from the URL to match the backend
+    const order_id = searchParams.get('order_id');
     const [status, setStatus] = useState<'processing' | 'success' | 'failed'>('processing');
     const [message, setMessage] = useState('Verifying your payment, please wait...');
 
     useEffect(() => {
-        // **FIX**: Check for link_id
-        if (!link_id) {
+        // **FIX**: Check for order_id
+        if (!order_id) {
             setStatus('failed');
-            setMessage('No Payment ID found. Invalid request.');
+            setMessage('No Order ID found. Invalid request.');
             return;
         }
 
@@ -25,8 +25,8 @@ function StatusContent() {
                 const response = await fetch('/api/cashfree/verify-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    // **FIX**: Send link_id in the body
-                    body: JSON.stringify({ link_id }),
+                    // **FIX**: Send order_id in the body
+                    body: JSON.stringify({ order_id }),
                 });
 
                 const data = await response.json();
@@ -44,11 +44,11 @@ function StatusContent() {
             }
         };
 
-        // Delay verification slightly to allow for webhook processing
+        // Delay verification slightly to allow for backend processing
         const timer = setTimeout(verifyPayment, 3000);
         return () => clearTimeout(timer);
 
-    }, [link_id]);
+    }, [order_id]);
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -80,10 +80,9 @@ function StatusContent() {
     );
 }
 
-
 export default function SubscriptionStatusPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
             <StatusContent />
         </Suspense>
     );

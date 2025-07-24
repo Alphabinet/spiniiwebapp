@@ -23,13 +23,12 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        // --- FIX: Expect link_id, not order_id ---
-        const { link_id } = await req.json();
-        if (!link_id) {
-            return NextResponse.json({ success: false, message: 'Payment Link ID is required.' }, { status: 400 });
+        // --- FIX: Expect order_id, which matches the subscribe route ---
+        const { order_id } = await req.json();
+        if (!order_id) {
+            return NextResponse.json({ success: false, message: 'Order ID is required.' }, { status: 400 });
         }
 
-        // 1. Get credentials
         const appId = process.env.CASHFREE_APP_ID;
         const secretKey = process.env.CASHFREE_SECRET_KEY;
         const apiUrl = process.env.CASHFREE_API_URL;
@@ -38,36 +37,33 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: 'Payment gateway not configured.' }, { status: 500 });
         }
 
-        // 2. Fetch payment link status from Cashfree's server
+        // --- FIX: Use the correct endpoint for fetching an Order ---
         const headers = {
             'Content-Type': 'application/json',
-            'x-api-version': '2023-08-01', // Match the version used for link creation
+            'x-api-version': '2022-09-01', // Match the version used for order creation
             'x-client-id': appId,
             'x-client-secret': secretKey,
         };
-        // --- FIX: Use the correct endpoint for fetching link status ---
-        const response = await fetch(`${apiUrl}/links/${link_id}/status`, { headers });
-        const cashfreeLink = await response.json();
+        const response = await fetch(`${apiUrl}/orders/${order_id}`, { headers });
+        const cashfreeOrder = await response.json();
 
         if (!response.ok) {
-            return NextResponse.json({ success: false, message: 'Failed to fetch payment link from Cashfree.' }, { status: 404 });
+            return NextResponse.json({ success: false, message: 'Failed to fetch order from Cashfree.' }, { status: 404 });
         }
 
-        // 3. Verify the payment status from Cashfree's response
-        if (cashfreeLink.link_status === 'PAID') {
-            const orderDocRef = adminDb.collection("orders").doc(link_id);
+        // --- FIX: Check order_status, not link_status ---
+        if (cashfreeOrder.order_status === 'PAID') {
+            const orderDocRef = adminDb.collection("orders").doc(order_id);
             const orderDoc = await orderDocRef.get();
 
-            // Check if the order exists and hasn't already been processed
             if (orderDoc.exists && orderDoc.data()?.status !== 'PAID') {
                 const userId = orderDoc.data()?.userId;
                 
-                // 4. Update Firestore using the ADMIN SDK
                 const userDocRef = adminDb.collection("users").doc(userId);
                 const creatorAppId = await getCreatorApplicationId(userId);
 
                 const expiryDate = new Date();
-                expiryDate.setMonth(expiryDate.getMonth() + 1); // 1-month subscription
+                expiryDate.setMonth(expiryDate.getMonth() + 1);
 
                 const subscriptionData = {
                     subscriptionStatus: 'active',
@@ -75,7 +71,6 @@ export async function POST(req: NextRequest) {
                     updatedAt: FieldValue.serverTimestamp()
                 };
 
-                // Use a batch to update multiple documents atomically
                 const batch = adminDb.batch();
                 batch.update(userDocRef, subscriptionData);
                 if (creatorAppId) {
@@ -85,11 +80,7 @@ export async function POST(req: NextRequest) {
                 
                 batch.update(orderDocRef, {
                     status: 'PAID',
-                    cashfreePaymentDetails: {
-                        cf_link_id: cashfreeLink.cf_link_id,
-                        link_status: cashfreeLink.link_status,
-                        link_payment_id: cashfreeLink.link_payment_id,
-                    },
+                    cashfreePaymentId: cashfreeOrder.cf_order_id, // Store relevant order data
                     paidAt: FieldValue.serverTimestamp(),
                 });
 
@@ -101,8 +92,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // If status is not PAID, return the current status
-        return NextResponse.json({ success: false, status: cashfreeLink.link_status });
+        return NextResponse.json({ success: false, status: cashfreeOrder.order_status });
 
     } catch (error: any) {
         console.error("Verification Error:", error);
