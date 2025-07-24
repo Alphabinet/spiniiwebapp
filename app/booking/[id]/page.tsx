@@ -895,11 +895,15 @@ const BookingPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-100 font-sans text-gray-800 p-6 flex items-center justify-center">
             {/* --- FIX: Changed script loading strategy to 'beforeInteractive' for faster loading --- */}
-            <Script 
-                src="https://sdk.cashfree.com/js/v3/cashfree.js" 
-                onLoad={() => setIsSDKReady(true)} 
-                strategy="beforeInteractive" 
+            <Script
+                src="https://sdk.cashfree.com/js/v3/cashfree.js"
+                onLoad={() => {
+                    console.log("Cashfree SDK Loaded!"); 
+                    setIsSDKReady(true);
+                }}
+                strategy="afterInteractive" 
             />
+        
             <div className="w-full sm:max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
