@@ -58,7 +58,7 @@ interface UserData {
     userId?: string;
     accountType?: 'normal' | 'creator';
     updatedAt?: Timestamp | FieldValue;
-    createdAt?: Timestamp | FieldData;
+    createdAt?: Timestamp | FieldValue;
     subscriptionStatus?: 'active' | 'inactive';
     subscriptionExpiresAt?: Timestamp;
 }
@@ -274,7 +274,6 @@ function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
 }
 
 // --- Helper Components & Functions ---
-
 const formatDate = (timestamp: Timestamp | null | undefined) => {
     if (!timestamp) return "N/A";
     try {
@@ -314,8 +313,7 @@ export function ActivityIcon({ type }: { type: string }) {
     }
 }
 
-
-// ===== Personal Information Component (Replaces NormalUserProfile and MobileNumberPrompt) =====
+// ===== Personal Information Component =====
 export function PersonalInformationForm({ user, userData, isMandatory }: { user: FirebaseUser, userData: UserData | null, isMandatory: boolean }) {
     const [formData, setFormData] = useState({ fullName: '', mobileNumber: '', cityState: '', gender: '' });
     const [isSaving, setIsSaving] = useState(false);
@@ -445,22 +443,21 @@ export function PersonalInformationForm({ user, userData, isMandatory }: { user:
     );
 }
 
+// ===== Application Form Component =====
 interface ApplicationFormProps {
     user: FirebaseUser | null | undefined;
-    userData: UserData | null; // <-- Added userData prop
+    userData: UserData | null;
     existingApplication: ApplicationData | null;
     isSubscribed: boolean;
 }
 
 export function ApplicationForm({ user, userData, existingApplication, isSubscribed }: ApplicationFormProps) {
     const [formData, setFormData] = useState({
-        // Auto-fill from existing application, fallback to user profile, then to empty
         fullName: existingApplication?.fullName || userData?.fullName || "",
         mobileNumber: existingApplication?.mobileNumber || userData?.mobileNumber || "",
         emailAddress: existingApplication?.emailAddress || userData?.email || "",
         cityState: existingApplication?.cityState || userData?.cityState || "",
         gender: existingApplication?.gender || userData?.gender || "",
-        // --- Creator specific fields ---
         instagramUsername: existingApplication?.instagramUsername || "",
         instagramProfileLink: existingApplication?.instagramProfileLink || "",
         totalFollowers: existingApplication?.totalFollowers || "",
@@ -483,7 +480,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | React.ChangeEvent<HTMLSelectElement> | React.ChangeEvent<HTMLTextAreaElement>>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
         if (errors[name]) { setErrors(prev => ({ ...prev, [name]: "" })); }
@@ -547,7 +544,6 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
                 profilePictureUrl: imageUrl,
                 userId: user.uid,
                 status: existingApplication?.status || "pending",
-                timestamp: existingApplication?.timestamp || serverTimestamp(),
                 updatedAt: serverTimestamp(),
             };
 
@@ -950,6 +946,7 @@ export default function CreatorDashboardPage() {
     );
 }
 
+// CORRECTED CreatorDashboard Component
 function CreatorDashboard() {
     const [user] = useAuthState(auth);
     const router = useRouter();
@@ -958,51 +955,32 @@ function CreatorDashboard() {
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
     const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('dashboard');
+    
+    // This ref ensures the initial view is set only once.
+    const initialViewIsSet = useRef(false);
 
-    // Effect for fetching all user-related data
+    // --- EFFECT 1: Handles data fetching and subscriptions ---
     useEffect(() => {
         if (!user) {
-            setLoading(false); // Set loading to false before redirect
+            setLoading(false);
             router.push('/login');
             return;
         }
 
+        // Listener for the user's main profile data
         const userDocRef = doc(db, "users", user.uid);
         const unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
             if (userSnap.exists()) {
                 const fetchedUserData = userSnap.data() as UserData;
-                setUserData(fetchedUserData);
-
-                // Check for subscription expiry
-                if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt) {
-                    const now = new Date();
-                    const expiryDate = fetchedUserData.subscriptionExpiresAt.toDate();
-                    if (now > expiryDate) {
-                        console.log("Subscription expired. Setting to inactive.");
-                        updateDoc(userDocRef, {
-                            subscriptionStatus: 'inactive',
-                            updatedAt: serverTimestamp(),
-                        });
-                        // Update local state immediately for responsiveness
-                        setUserData(prev => prev ? { ...prev, subscriptionStatus: 'inactive' } : null);
-                    }
-                }
-
-                // If personal info is incomplete, force 'profile' view
-                const isProfileComplete = !!(fetchedUserData.fullName && fetchedUserData.mobileNumber && fetchedUserData.cityState && fetchedUserData.gender);
-                if (!isProfileComplete) {
-                    setView('profile');
-                } else if (!creatorData && fetchedUserData.accountType !== 'creator') {
-                    // If no creator data and user is not already a creator, default to applicationForm
-                    setView('applicationForm');
-                } else if (creatorData?.status === 'approved') {
-                    setView('dashboard');
+                // Check for and handle expired subscription
+                if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt && fetchedUserData.subscriptionExpiresAt.toDate() < new Date()) {
+                    updateDoc(userDocRef, { subscriptionStatus: 'inactive', updatedAt: serverTimestamp() });
+                    // No need to set local state here, onSnapshot will fire again with updated data
                 } else {
-                    setView('applicationForm');
+                    setUserData(fetchedUserData);
                 }
-
             } else {
-                // If user document doesn't exist, create a basic one
+                // If user document doesn't exist, create it
                 const initialData: UserData = {
                     userId: user.uid,
                     email: user.email,
@@ -1011,68 +989,67 @@ function CreatorDashboard() {
                     accountType: 'normal',
                     subscriptionStatus: 'inactive',
                 };
-                setDoc(userDocRef, initialData, { merge: true }); // Use merge:true to avoid overwriting if partial data exists
+                setDoc(userDocRef, initialData, { merge: true });
                 setUserData(initialData);
-                setView('profile'); // New users always start at profile to complete info
             }
-            setLoading(false); // Set loading to false once initial user data is fetched
         }, (error) => {
             console.error("Error fetching user data:", error);
             setLoading(false);
         });
 
+        // Listener for the user's creator application
         const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
         const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
             if (!snapshot.empty) {
                 const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
                 setCreatorData(data);
-                // Ensure user accountType is 'creator' in their user doc
-                if (userData?.accountType !== 'creator') { // Only update if it's different
-                    await setDoc(doc(db, "users", user.uid), { accountType: 'creator' }, { merge: true });
-                }
-
+                
+                // Set recent activity based on application data
                 const activities: Activity[] = [];
-                if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
-                if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
-                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
-                } else if (data.updatedAt && !data.timestamp) { // Handle case where timestamp might be missing but updatedAt exists
-                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
-                }
-                if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
+                if (data.timestamp) activities.push({ type: 'submitted', description: 'Application was submitted.', time: formatDate(data.timestamp) });
+                if (data.updatedAt) activities.push({ type: 'update', description: 'Profile was recently updated.', time: formatDate(data.updatedAt) });
+                if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Application approved.', time: formatDate(data.updatedAt || data.timestamp) });
                 setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
-
-                // Set view based on creator application status if user profile is complete
-                if (userData?.fullName && userData?.mobileNumber && userData?.cityState && userData?.gender) {
-                    if (data.status === 'approved') {
-                        setView('dashboard');
-                    } else {
-                        setView('applicationForm');
-                    }
-                }
 
             } else {
                 setCreatorData(null);
-                // Ensure user accountType is 'normal' if no creator application exists
-                if (userData?.accountType !== 'normal') { // Only update if it's different
-                    await setDoc(doc(db, "users", user.uid), { accountType: 'normal' }, { merge: true });
-                }
-                // If personal profile is complete, and no creator app, default to application form
-                if (userData?.fullName && userData?.mobileNumber && userData?.cityState && userData?.gender) {
-                    setView('applicationForm');
-                }
             }
-            setLoading(false); // Set loading to false once creator data is fetched
+            // Once creator data status is known, we can stop the main loading indicator
+            setLoading(false);
         }, (error) => {
             console.error("Error fetching creator data:", error);
             setLoading(false);
         });
 
+        // Cleanup listeners on component unmount
         return () => {
             unsubscribeUser();
             unsubscribeCreator();
         };
-    }, [user, router, userData?.fullName, userData?.mobileNumber, userData?.cityState, userData?.gender, userData?.accountType, creatorData]);
+    }, [user, router]); // <-- Correct, minimal dependencies
 
+    // --- EFFECT 2: Sets the initial view after data is loaded ---
+    useEffect(() => {
+        // This effect should only run once after data is loaded.
+        if (loading || initialViewIsSet.current || !userData) {
+            return;
+        }
+        
+        const isProfileComplete = !!(userData.fullName && userData.mobileNumber && userData.cityState && userData.gender);
+
+        if (!isProfileComplete) {
+            setView('profile');
+        } else if (creatorData?.status === 'approved') {
+            setView('dashboard');
+        } else {
+            // Default to application form if profile is complete but not an approved creator
+            setView('applicationForm');
+        }
+        
+        // Mark the initial view as set to prevent this from running again
+        initialViewIsSet.current = true;
+
+    }, [loading, userData, creatorData]); // <-- Runs only when data state changes
 
     if (loading) {
         return (
@@ -1122,12 +1099,6 @@ function CreatorDashboard() {
             default:
                 if (creatorData && creatorData.status === 'approved') {
                     // --- CREATOR'S DASHBOARD VIEW (when approved) ---
-                    const statusDisplay = {
-                        "approved": { text: "Approved", color: "text-green-700", bgColor: "bg-green-100" },
-                        "rejected": { text: "Rejected", color: "text-red-700", bgColor: "bg-red-100" },
-                        "pending": { text: "Pending Review", color: "text-yellow-700", bgColor: "bg-yellow-100" },
-                    }[creatorData.status];
-
                     return (
                         <>
                             {/* Creator Profile Summary */}

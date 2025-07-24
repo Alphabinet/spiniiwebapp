@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Script from 'next/script';
 import {
-    Loader2, ArrowRight, ArrowLeft, Lock, Users, Calendar as CalendarIcon, // Renamed Calendar to CalendarIcon to avoid conflict
+    Loader2, ArrowRight, ArrowLeft, Lock, Users, Calendar as CalendarIcon,
     BarChart2, FileText, CheckCircle, User, Instagram, Check,
     X, CreditCard, Plus, Minus
 } from 'lucide-react';
@@ -21,8 +21,6 @@ import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { addDoc, collection, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
-
-// --- Import Calendar and Popover for Date Picker ---
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -108,7 +106,7 @@ const steps = [
     { name: 'Campaign Details', icon: FileText, fields: ['campaignName', 'platform'] },
     { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'services'] },
     { name: 'Target Audience', icon: BarChart2, fields: ['minAge', 'maxAge', 'gender', 'location'] },
-    { name: 'Content & Deadline', icon: CalendarIcon, fields: ['categories', 'campaignDescription', 'deadline'] }, // Using CalendarIcon
+    { name: 'Content & Deadline', icon: CalendarIcon, fields: ['categories', 'campaignDescription', 'deadline'] },
     { name: 'Owner Details', icon: User, fields: ['ownerFullName', 'contactNumber', 'ownerEmailAddress', 'ownerCity', 'ownerDistrict', 'ownerState', 'ownerCountry'] },
     { name: 'Summary & Payment', icon: CreditCard, fields: [] },
     { name: 'Confirmation', icon: CheckCircle, fields: [] },
@@ -204,8 +202,7 @@ const CampaignCreationPage = () => {
         setFormData({ ...formData, [name]: value as any });
         setErrors(prev => ({ ...prev, [name]: undefined }));
     };
-
-    // --- New handler for Date Picker ---
+    
     const handleDateChange = (date: Date | undefined) => {
         setFormData(prev => ({
             ...prev,
@@ -304,7 +301,7 @@ const CampaignCreationPage = () => {
                         newErrors.deadline = 'Deadline cannot be in the past.';
                         isValid = false;
                     }
-                } else { // Check if deadline is empty
+                } else { 
                     newErrors.deadline = 'This field is required.';
                     isValid = false;
                 }
@@ -379,7 +376,6 @@ const CampaignCreationPage = () => {
             }
         }
 
-        // Add specific logical validations
         if (formData.minimumFollowers !== '' && Number(formData.minimumFollowers) < 1000) {
             newErrors.minimumFollowers = 'Minimum followers must be at least 1,000.';
             isValidOverall = false;
@@ -421,21 +417,41 @@ const CampaignCreationPage = () => {
         setErrors(newErrors);
         return isValidOverall;
     };
-
+    
     const nextStep = () => {
-        if (currentStep === steps.length - 2) { // If it's the "Summary & Payment" step
-            setCurrentStep(currentStep + 1);
-            setErrors({});
-        } else if (validateStep()) { // This is for stepping through prior steps one by one
+        if (validateStep()) {
             setCurrentStep(currentStep + 1);
             setErrors({});
         }
     };
+    
     const prevStep = () => {
         setCurrentStep(currentStep - 1);
         setErrors({});
     };
 
+    const handleProceedToReview = () => {
+        const tempErrors = { ...errors }; // Preserve current errors before validating all
+        if (validateAllFields()) {
+            setCurrentStep(steps.length - 2); // Go to summary page
+        } else {
+            toast.error('Please correct all errors before proceeding.');
+            const firstErrorField = Object.keys(errors).find(key => !!errors[key as keyof typeof errors]) || Object.keys(tempErrors)[0];
+    
+            if (firstErrorField) {
+                const stepIndexWithError = steps.findIndex(step =>
+                    step.fields.includes(firstErrorField as any)
+                );
+    
+                if (stepIndexWithError !== -1) {
+                    setCurrentStep(stepIndexWithError);
+                } else {
+                    setCurrentStep(1);
+                }
+            }
+        }
+    };
+    
     const getServiceFee = (creators: number): number => {
         if (creators <= 0) return 0;
         const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
@@ -450,37 +466,8 @@ const CampaignCreationPage = () => {
     }, [formData.totalCreatorBudget, formData.numberOfCreators]);
 
     const handlePayment = async () => {
-        if (!user) {
-            toast.error('Authentication error. Please refresh and log in.');
-            return;
-        }
-        if (!isCashfreeReady) {
-            toast.error('Payment gateway is not ready. Please wait a moment.');
-            return;
-        }
-        if (totalAmount <= 0) {
-            toast.error('Total amount must be greater than zero.');
-            return;
-        }
-
-        if (!validateAllFields()) {
-            toast.error('Please go back and correct the highlighted errors before paying.');
-            const firstErrorField = Object.keys(errors).find(key => errors[key as keyof (CampaignFormData | { services: string })]);
-
-            if (firstErrorField) {
-                const fieldToFind = firstErrorField === 'services' ? 'services' : firstErrorField;
-                const stepIndexWithError = steps.findIndex(step =>
-                    step.fields.includes(fieldToFind as keyof CampaignFormData)
-                );
-
-                if (stepIndexWithError !== -1 && stepIndexWithError < currentStep) {
-                    setCurrentStep(stepIndexWithError);
-                } else if (stepIndexWithError === -1) {
-                    setCurrentStep(0);
-                }
-            } else {
-                setCurrentStep(0);
-            }
+        if (!user || !isCashfreeReady || totalAmount <= 0) {
+            toast.error('Cannot proceed with payment. Please check login status and amount.');
             return;
         }
 
@@ -488,7 +475,7 @@ const CampaignCreationPage = () => {
         setPaymentStatus('processing');
 
         try {
-            const token = await user.getIdIdToken();
+            const token = await user.getIdToken();
             const response = await fetch('/api/cashfree/create-campaign-order', {
                 method: 'POST',
                 headers: {
@@ -521,13 +508,13 @@ const CampaignCreationPage = () => {
             } else {
                 toast.error(data.message || "Could not initiate payment.");
                 setPaymentStatus('failed');
-                setCurrentStep(currentStep + 1);
+                setCurrentStep(steps.length - 1);
             }
         } catch (err) {
             console.error('An error occurred during payment setup.', err);
             toast.error('An unexpected error occurred during payment setup.');
             setPaymentStatus('failed');
-            setCurrentStep(currentStep + 1);
+            setCurrentStep(steps.length - 1);
         } finally {
             setIsSubmitting(false);
         }
@@ -680,7 +667,6 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="deadline" className="font-semibold text-gray-700">Deadline</Label>
-                                {/* --- Date Picker Integration --- */}
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
@@ -701,7 +687,6 @@ const CampaignCreationPage = () => {
                                             selected={formData.deadline ? new Date(formData.deadline) : undefined}
                                             onSelect={handleDateChange}
                                             initialFocus
-                                            // Disable past dates, but allow today to be selected
                                             disabled={(date) => date < new Date() && date.toDateString() !== new Date().toDateString()}
                                         />
                                     </PopoverContent>
@@ -822,7 +807,7 @@ const CampaignCreationPage = () => {
                                     </div>
                                     <Button
                                         onClick={handlePayment}
-                                        disabled={isSubmitting || !user || !isCashfreeReady || totalAmount <= 0} // Add totalAmount check
+                                        disabled={isSubmitting || !user || !isCashfreeReady || totalAmount <= 0}
                                         className="w-full bg-purple-600 hover:bg-purple-700 text-base py-3 mt-4"
                                     >
                                         {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Lock className="mr-2 h-5 w-5" />}
@@ -903,18 +888,18 @@ const CampaignCreationPage = () => {
                     <div className="min-h-[400px] sm:min-h-[450px]">
                         {renderStep()}
                     </div>
-
-                    {currentStep < steps.length - 1 && (
+                    
+                    {currentStep < steps.length - 2 && (
                         <div className="flex justify-between mt-6 pt-4 border-t">
                             <Button onClick={prevStep} variant="outline" className="px-3 sm:px-4 py-2 text-sm sm:text-base" disabled={currentStep === 0}>
                                 <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" /> Back
                             </Button>
-                            {currentStep < steps.length - 2 ? (
+                            {currentStep < steps.length - 3 ? (
                                 <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700">
                                     Next <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>
                             ) : (
-                                <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
+                                <Button onClick={handleProceedToReview} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-purple-600 hover:bg-purple-700" disabled={isSubmitting}>
                                     Review & Pay <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
                                 </Button>
                             )}

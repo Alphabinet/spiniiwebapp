@@ -1,34 +1,26 @@
 import {
   Mail,
-  Phone,
   MapPin,
   Instagram,
   Linkedin,
-} from "lucide-react";
-import Link from 'next/link'; // Import the Link component
-import Image from 'next/image'; // Import the Image component for optimized images
+} from "lucide-react"; // Removed Phone as we're using a custom SVG for WhatsApp
+import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   return (
-    // Changed background color to black
     <footer className="bg-black text-white">
-      {/* Container for overall padding and max-width */}
-      {/* Added pb-24 for extra bottom padding on all screen sizes to accommodate a potential fixed bottom nav */}
       <div className="container mx-auto px-4 py-8 sm:py-10 md:py-12 pb-24 sm:pb-24 md:pb-24">
-        {/* Main grid for footer sections, responsive layout */}
-        {/* Adjusted gap for smaller screens, and ensured consistent column behavior */}
         <div className="grid grid-cols-1 gap-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-12">
           {/* Company Info Section */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              {/* Replaced SNAAPII text with an Image component */}
-              {/* Assuming the image is in the public directory, its path will be /snaapii.png */}
               <Image
                 src="/snaapii.png"
                 alt="SNAAPII Logo"
-                width={100} // Adjust width as needed
-                height={40} // Adjust height as needed, maintaining aspect ratio
-                className="h-auto" // Ensures image scales responsively
+                width={100}
+                height={40}
+                className="h-auto"
               />
             </div>
             <p className="text-gray-400 text-sm leading-relaxed">
@@ -70,7 +62,6 @@ export default function Footer() {
                   Terms & Conditions
                 </Link>
               </li>
-              {/* Added Return & Refund Policy link */}
               <li>
                 <Link href="/return-refund" className="text-gray-400 hover:text-white transition-colors duration-300">
                   Return & Refund Policy
@@ -83,14 +74,35 @@ export default function Footer() {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-white">Contact Us</h3>
             <div className="space-y-3">
-              <div className="flex items-center space-x-3">
+              {/* Mailto link */}
+              <a
+                href="mailto:contact@snaapii.com"
+                className="flex items-center space-x-3 text-gray-400 hover:text-white transition-colors duration-300"
+              >
                 <Mail className="h-4 w-4 text-blue-400" aria-hidden="true" />
-                <span className="text-gray-400 text-sm">business@snaapii.com</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Phone className="h-4 w-4 text-green-400" aria-hidden="true" />
-                <span className="text-gray-400 text-sm">+91 70849 89378</span>
-              </div>
+                <span className="text-sm">contact@snaapii.com</span>
+              </a>
+              {/* WhatsApp link with custom SVG icon */}
+              <a
+                href="https://wa.me/917317016213"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-3 text-gray-400 hover:text-white transition-colors duration-300"
+              >
+                {/* WhatsApp SVG Icon */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="h-4 w-4 text-green-400"
+                  aria-hidden="true"
+                >
+                  <path d="M12.04 2C7.03 2 3 6.03 3 11.04c0 1.94.63 3.74 1.72 5.2L3.08 21.03l4.89-1.28c1.3.73 2.8 1.14 4.07 1.14h.01c5.01 0 9.04-4.03 9.04-9.04S17.05 2 12.04 2zm3.87 13.92c-.17.15-.3.2-.56.28-.27.08-.98.37-1.12.39-.14.02-.24.03-.49-.1s-1.5-.68-1.84-.81-.57-.2-.8-.2-.3-.15-.65.1-.9.84-1.12 1.01-.45.2-.84.02c-1.1-.55-2.2-1.25-3.07-2.3-1.07-1.32-1.79-2.8-1.8-3.04-.01-.24.16-.38.25-.47.09-.09.2-.18.27-.29.08-.1.17-.2.25-.33.08-.13.03-.25-.03-.35-.06-.1-.23-.25-.33-.27-.08-.02-.17-.02-.45-.02h-.48c-.27 0-.7-.08-.96.44s-.95 2.3.93 4.54c1.88 2.24 3.65 2.92 3.99 3.06.34.14.54.1.72.09.2-.01.65-.25.75-.38.1-.13.36-.3.51-.4.16-.1.29-.14.5-.07.2.07 1.3.84 1.49.95.19.1.33.15.36.16.03.01.18.06.31.02.13-.04.83-.34 1.05-.42.22-.08.3-.13.34-.2.04-.07.08-.13.12-.2.04-.07.08-.13.1-.2.01-.06.01-.12.02-.19v-.01c.02-.06.03-.12.03-.19.01-.06.01-.12.01-.19-.01-.15-.02-.2-.25-.34z" />
+                </svg>
+                <span className="text-sm">+91 7317016213</span>
+              </a>
               <div className="flex items-center space-x-3">
                 <MapPin className="h-4 w-4 text-purple-400" aria-hidden="true" />
                 <span className="text-gray-400 text-sm">Sultanpur Uttar Pradesh 222303</span>
@@ -111,7 +123,6 @@ export default function Footer() {
             <Link href="/cookiepolicy" className="text-gray-400 hover:text-white transition-colors duration-300">
               Cookie Policy
             </Link>
-            {/* Added Return & Refund Policy link to the bottom bar */}
             <Link href="/return-refund" className="text-gray-400 hover:text-white transition-colors duration-300">
               Return & Refund Policy
             </Link>
