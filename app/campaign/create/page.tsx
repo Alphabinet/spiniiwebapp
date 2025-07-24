@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Script from 'next/script';
 import {
-    Loader2, ArrowRight, ArrowLeft, Lock, Users, Calendar,
+    Loader2, ArrowRight, ArrowLeft, Lock, Users, Calendar as CalendarIcon, // Renamed Calendar to CalendarIcon to avoid conflict
     BarChart2, FileText, CheckCircle, User, Instagram, Check,
     X, CreditCard, Plus, Minus
 } from 'lucide-react';
@@ -21,6 +21,10 @@ import { onAuthStateChanged, User as FirebaseAuthUser } from 'firebase/auth';
 import { addDoc, collection, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
+
+// --- Import Calendar and Popover for Date Picker ---
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 // --- Type Definitions for Cashfree ---
 interface Cashfree {
@@ -104,7 +108,7 @@ const steps = [
     { name: 'Campaign Details', icon: FileText, fields: ['campaignName', 'platform'] },
     { name: 'Services & Budget', icon: Users, fields: ['minimumFollowers', 'numberOfCreators', 'services'] },
     { name: 'Target Audience', icon: BarChart2, fields: ['minAge', 'maxAge', 'gender', 'location'] },
-    { name: 'Content & Deadline', icon: Calendar, fields: ['categories', 'campaignDescription', 'deadline'] },
+    { name: 'Content & Deadline', icon: CalendarIcon, fields: ['categories', 'campaignDescription', 'deadline'] }, // Using CalendarIcon
     { name: 'Owner Details', icon: User, fields: ['ownerFullName', 'contactNumber', 'ownerEmailAddress', 'ownerCity', 'ownerDistrict', 'ownerState', 'ownerCountry'] },
     { name: 'Summary & Payment', icon: CreditCard, fields: [] },
     { name: 'Confirmation', icon: CheckCircle, fields: [] },
@@ -201,6 +205,15 @@ const CampaignCreationPage = () => {
         setErrors(prev => ({ ...prev, [name]: undefined }));
     };
 
+    // --- New handler for Date Picker ---
+    const handleDateChange = (date: Date | undefined) => {
+        setFormData(prev => ({
+            ...prev,
+            deadline: date ? format(date, 'yyyy-MM-dd') : '',
+        }));
+        setErrors(prev => ({ ...prev, deadline: undefined }));
+    };
+
     const handleCategoryChange = (category: string) => {
         setFormData((prev) => {
             const newCategories = prev.categories.includes(category)
@@ -282,8 +295,17 @@ const CampaignCreationPage = () => {
                 }
                 break;
             case 3:
-                if (formData.deadline && new Date(formData.deadline) < new Date()) {
-                    newErrors.deadline = 'Deadline cannot be in the past.';
+                if (formData.deadline) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const deadlineDate = new Date(formData.deadline);
+                    deadlineDate.setHours(0, 0, 0, 0);
+                    if (deadlineDate < today) {
+                        newErrors.deadline = 'Deadline cannot be in the past.';
+                        isValid = false;
+                    }
+                } else { // Check if deadline is empty
+                    newErrors.deadline = 'This field is required.';
                     isValid = false;
                 }
                 break;
@@ -307,8 +329,7 @@ const CampaignCreationPage = () => {
         }
         return isValid;
     };
-    
-    // --- FIX: Create a single function to validate ALL required fields before payment ---
+
     const validateAllFields = (): boolean => {
         const newErrors: Partial<Record<keyof CampaignFormData | 'services', string>> = {};
         const allFields: (keyof CampaignFormData | 'services')[] = [
@@ -339,29 +360,25 @@ const CampaignCreationPage = () => {
                 newErrors[field as keyof CampaignFormData] = 'This field is required.';
                 fieldIsValid = false;
             } else if (typeof value === 'number' && (value === '' || isNaN(value))) {
-                // This case handles number inputs where the value might be 0, but 0 is a valid input for certain fields like services counts.
-                // However, for fields like minimumFollowers, an empty string or NaN derived from an empty input should be caught.
-                // The earlier check `!value && value !== 0` already handles general empty/zero cases.
-                // Let's ensure explicit check for number fields that *must* have a positive value if applicable.
                 if (['minimumFollowers', 'minAge', 'maxAge', 'numberOfCreators'].includes(field as string)) {
-                     if (value === '' || isNaN(Number(value)) || Number(value) <= 0) { // For fields that require a positive number
+                    if (value === '' || isNaN(Number(value)) || Number(value) <= 0) {
                         newErrors[field as keyof CampaignFormData] = 'This field is required and must be a positive number.';
                         fieldIsValid = false;
                     }
-                } else if (!value && value !== 0) { // General check for other number fields that might be 0 but still required
+                } else if (!value && value !== 0) {
                     newErrors[field as keyof CampaignFormData] = 'This field is required.';
                     fieldIsValid = false;
                 }
-            } else if (!value && value !== 0) { // This handles other non-numeric empty required fields
+            } else if (!value && value !== 0) {
                 newErrors[field as keyof CampaignFormData] = 'This field is required.';
                 fieldIsValid = false;
             }
-            
+
             if (!fieldIsValid) {
                 isValidOverall = false;
             }
         }
-        
+
         // Add specific logical validations
         if (formData.minimumFollowers !== '' && Number(formData.minimumFollowers) < 1000) {
             newErrors.minimumFollowers = 'Minimum followers must be at least 1,000.';
@@ -378,14 +395,17 @@ const CampaignCreationPage = () => {
         }
         if (formData.deadline) {
             const today = new Date();
-            today.setHours(0, 0, 0, 0); // Normalize to start of day
+            today.setHours(0, 0, 0, 0);
             const deadlineDate = new Date(formData.deadline);
-            deadlineDate.setHours(0, 0, 0, 0); // Normalize to start of day
+            deadlineDate.setHours(0, 0, 0, 0);
 
             if (deadlineDate < today) {
                 newErrors.deadline = 'Deadline cannot be in the past.';
                 isValidOverall = false;
             }
+        } else {
+            newErrors.deadline = 'This field is required.';
+            isValidOverall = false;
         }
         const phoneRegex = /^\+?\d{10,15}$/;
         if (formData.contactNumber && !phoneRegex.test(formData.contactNumber)) {
@@ -397,15 +417,13 @@ const CampaignCreationPage = () => {
             newErrors.ownerEmailAddress = 'Please enter a valid Email Address.';
             isValidOverall = false;
         }
-        
+
         setErrors(newErrors);
         return isValidOverall;
     };
 
     const nextStep = () => {
         if (currentStep === steps.length - 2) { // If it's the "Summary & Payment" step
-            // For the last step before confirmation, we just move to it.
-            // Validation for payment itself happens on handlePayment.
             setCurrentStep(currentStep + 1);
             setErrors({});
         } else if (validateStep()) { // This is for stepping through prior steps one by one
@@ -418,11 +436,11 @@ const CampaignCreationPage = () => {
         setErrors({});
     };
 
-   const getServiceFee = (creators: number): number => {
-    if (creators <= 0) return 0;
-    const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
-    return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
-};
+    const getServiceFee = (creators: number): number => {
+        if (creators <= 0) return 0;
+        const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
+        return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
+    };
 
     const { creatorsCost, serviceFee, totalAmount } = useMemo(() => {
         const creatorsCost = Number(formData.totalCreatorBudget) || 0;
@@ -432,7 +450,6 @@ const CampaignCreationPage = () => {
     }, [formData.totalCreatorBudget, formData.numberOfCreators]);
 
     const handlePayment = async () => {
-        // Essential checks before initiating payment
         if (!user) {
             toast.error('Authentication error. Please refresh and log in.');
             return;
@@ -446,29 +463,22 @@ const CampaignCreationPage = () => {
             return;
         }
 
-        // --- FIX: Use the new, comprehensive validation function ---
         if (!validateAllFields()) {
             toast.error('Please go back and correct the highlighted errors before paying.');
-            // Find the first step with an error and navigate to it
             const firstErrorField = Object.keys(errors).find(key => errors[key as keyof (CampaignFormData | { services: string })]);
-            
+
             if (firstErrorField) {
-                // Special handling for 'services' field to map it to step 1
                 const fieldToFind = firstErrorField === 'services' ? 'services' : firstErrorField;
-                const stepIndexWithError = steps.findIndex(step => 
+                const stepIndexWithError = steps.findIndex(step =>
                     step.fields.includes(fieldToFind as keyof CampaignFormData)
                 );
 
                 if (stepIndexWithError !== -1 && stepIndexWithError < currentStep) {
                     setCurrentStep(stepIndexWithError);
                 } else if (stepIndexWithError === -1) {
-                    // Fallback if field isn't explicitly in a step's fields (should ideally not happen with comprehensive allFields list)
                     setCurrentStep(0);
                 }
             } else {
-                // If validateAllFields returns false but errors object is empty,
-                // it implies a subtle validation bug or a race condition.
-                // Fallback to first step.
                 setCurrentStep(0);
             }
             return;
@@ -478,7 +488,7 @@ const CampaignCreationPage = () => {
         setPaymentStatus('processing');
 
         try {
-            const token = await user.getIdToken();
+            const token = await user.getIdIdToken();
             const response = await fetch('/api/cashfree/create-campaign-order', {
                 method: 'POST',
                 headers: {
@@ -511,13 +521,13 @@ const CampaignCreationPage = () => {
             } else {
                 toast.error(data.message || "Could not initiate payment.");
                 setPaymentStatus('failed');
-                setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
+                setCurrentStep(currentStep + 1);
             }
         } catch (err) {
             console.error('An error occurred during payment setup.', err);
             toast.error('An unexpected error occurred during payment setup.');
             setPaymentStatus('failed');
-            setCurrentStep(currentStep + 1); // Move to confirmation step to show failure
+            setCurrentStep(currentStep + 1);
         } finally {
             setIsSubmitting(false);
         }
@@ -670,7 +680,32 @@ const CampaignCreationPage = () => {
                             </div>
                             <div>
                                 <Label htmlFor="deadline" className="font-semibold text-gray-700">Deadline</Label>
-                                <Input id="deadline" name="deadline" type="date" value={formData.deadline} onChange={handleInputChange} className={cn("mt-1", errors.deadline && 'border-red-500')} />
+                                {/* --- Date Picker Integration --- */}
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                                "w-full justify-start text-left font-normal mt-1",
+                                                !formData.deadline && "text-muted-foreground",
+                                                errors.deadline && 'border-red-500'
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {formData.deadline ? format(new Date(formData.deadline), "PPP") : <span>Pick a date</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={formData.deadline ? new Date(formData.deadline) : undefined}
+                                            onSelect={handleDateChange}
+                                            initialFocus
+                                            // Disable past dates, but allow today to be selected
+                                            disabled={(date) => date < new Date() && date.toDateString() !== new Date().toDateString()}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                                 {errors.deadline && <p className="text-red-500 text-sm mt-1">{errors.deadline}</p>}
                             </div>
                             <div>
@@ -836,13 +871,12 @@ const CampaignCreationPage = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            {/* --- FIX: Use a more reliable script loading strategy --- */}
             <Script
                 src="https://sdk.cashfree.com/js/v3/cashfree.js"
                 onLoad={() => setIsCashfreeReady(true)}
                 strategy="afterInteractive"
             />
-            
+
             <div className="container mx-auto px-2 sm:px-4 py-4 max-w-6xl">
                 <div className="bg-white p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 pb-20">
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-center text-gray-800 mb-2">
@@ -875,7 +909,6 @@ const CampaignCreationPage = () => {
                             <Button onClick={prevStep} variant="outline" className="px-3 sm:px-4 py-2 text-sm sm:text-base" disabled={currentStep === 0}>
                                 <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" /> Back
                             </Button>
-                            {/* The "Review & Pay" button now specifically handles validation for moving to the summary step */}
                             {currentStep < steps.length - 2 ? (
                                 <Button onClick={nextStep} className="px-3 sm:px-4 py-2 text-sm sm:text-base bg-green-600 hover:bg-green-700">
                                     Next <ArrowRight className="ml-1 sm:ml-2 h-4 w-4" />
