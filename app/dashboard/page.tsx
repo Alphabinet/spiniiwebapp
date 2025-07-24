@@ -168,14 +168,11 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
             </div>
         );
     }
-    
+
     return (
         <>
             <Script
-                src={process.env.NEXT_PUBLIC_CASHFREE_MODE === 'sandbox'
-                    ? "https://sdk.cashfree.com/js/v3/cashfree-sbox.sdk.min.js"
-                    : "https://sdk.cashfree.com/js/v3/cashfree.sdk.min.js"
-                }
+                src="https://sdk.cashfree.com/js/v3/cashfree.sdk.min.js"
                 onLoad={() => {
                     setIsSDKReady(true);
                     setSdkError(false);
@@ -219,12 +216,12 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
                     </div>
                 )}
                 <ul className={`space-y-3 sm:space-y-4 mb-8 sm:mb-10 flex-grow text-left text-white/90 text-sm sm:text-base ${isSubscribed ? 'text-green-100' : ''}`}>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Get Featured on Homepage</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> Unlimited Brand Collaborations</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No Direct Talk with Brands – We Handle Everything</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 100% Payment Security</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> 24×7 Priority Support</li>
-                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`}/> No hidden charges</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> Get Featured on Homepage</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> Unlimited Brand Collaborations</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> No Direct Talk with Brands – We Handle Everything</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> 100% Payment Security</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> 24×7 Priority Support</li>
+                    <li className="flex items-center gap-3"><CheckCircleIcon className={`w-5 h-5 ${isSubscribed ? 'text-green-200' : 'text-yellow-400'}`} /> No hidden charges</li>
                 </ul>
                 <button
                     onClick={handlePurchase}
@@ -551,7 +548,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
                 await uploadBytes(imageRef, image);
                 imageUrl = await getDownloadURL(imageRef);
             }
-            
+
             const dataToSend = {
                 ...formData,
                 profilePictureUrl: imageUrl,
@@ -1048,7 +1045,7 @@ function CreatorDashboard() {
             <div className="container mx-auto px-4 py-8 max-w-4xl">
                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-8">
                     <div className="flex">
-                        <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zM9 5v6h2V5H9zm0 8h2v-2H9v2z"/></svg></div>
+                        <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zM9 5v6h2V5H9zm0 8h2v-2H9v2z" /></svg></div>
                         <div>
                             <p className="font-bold">Action Required</p>
                             <p className="text-sm">Welcome! Please complete your personal information to access the dashboard and all website features.</p>
@@ -1070,7 +1067,7 @@ function CreatorDashboard() {
 
             case 'applicationForm':
                 return <ApplicationForm user={user} userData={userData} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
-            
+
             case 'dashboard':
             default:
                 if (creatorData) {
@@ -1105,7 +1102,7 @@ function CreatorDashboard() {
                                         </a>
                                     </div>
                                     <button onClick={() => setView('applicationForm')} className="w-full sm:w-auto mt-4 sm:mt-0 inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer gap-2">
-                                        <PencilSquareIcon className="w-5 h-5"/> Manage Creator Profile
+                                        <PencilSquareIcon className="w-5 h-5" /> Manage Creator Profile
                                     </button>
                                 </div>
                                 <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 bg-purple-50 rounded-xl p-4">
@@ -1120,7 +1117,7 @@ function CreatorDashboard() {
                     // --- NORMAL USER'S DASHBOARD VIEW ---
                     return (
                         <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
-                            <SparklesIcon className="w-16 h-16 mx-auto text-purple-500 mb-4"/>
+                            <SparklesIcon className="w-16 h-16 mx-auto text-purple-500 mb-4" />
                             <h2 className="text-2xl font-bold text-gray-900">Ready to Become a Creator?</h2>
                             <p className="text-gray-600 mt-2 mb-6 max-w-xl mx-auto">
                                 Join our exclusive network of influencers and start collaborating with amazing brands. Apply today to unlock new opportunities!
@@ -1138,7 +1135,7 @@ function CreatorDashboard() {
     // --- This is the main return for a user with a COMPLETE profile ---
     return (
         <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
-            
+
             {/* Header section with view-switching buttons */}
             <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
@@ -1163,7 +1160,7 @@ function CreatorDashboard() {
                         className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'profile' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         title="Edit My Profile"
                     >
-                        <UserCircleIcon className="h-5 w-5"/> <span className="hidden sm:inline">My Profile</span>
+                        <UserCircleIcon className="h-5 w-5" /> <span className="hidden sm:inline">My Profile</span>
                     </button>
                     {/* Creator Application View (Always available) */}
                     <button
@@ -1171,7 +1168,7 @@ function CreatorDashboard() {
                         className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'applicationForm' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         title={creatorData ? "Manage Creator Profile" : "Become a Creator"}
                     >
-                        <DocumentTextIcon className="h-5 w-5"/>
+                        <DocumentTextIcon className="h-5 w-5" />
                         <span className="hidden sm:inline">
                             {creatorData ? "Creator Profile" : "Apply"}
                         </span>
@@ -1186,10 +1183,10 @@ function CreatorDashboard() {
 
                 <div className="lg:col-span-1">
                     {user && userData && (
-                        <SubscriptionCard 
-                            user={user} 
-                            userData={userData} 
-                            creatorApplication={creatorData} 
+                        <SubscriptionCard
+                            user={user}
+                            userData={userData}
+                            creatorApplication={creatorData}
                         />
                     )}
                 </div>
