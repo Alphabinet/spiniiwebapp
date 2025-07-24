@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { User as FirebaseUser } from "firebase/auth";
 import {
-    UsersIcon, PlayIcon, EyeIcon, CheckCircleIcon, UserCircleIcon, DocumentTextIcon
+    UsersIcon, PlayIcon, EyeIcon, CheckCircleIcon, UserCircleIcon, DocumentTextIcon, PencilSquareIcon, SparklesIcon
 } from '@heroicons/react/24/outline';
 import Image from "next/image";
 import React from 'react';
@@ -68,7 +68,7 @@ interface Activity {
     time: string;
 }
 
-// ===== Subscription Component (Updated for Server Redirect) =====
+// ===== Subscription Component (No Changes) =====
 function SubscriptionCard({ user, userData, creatorApplication }: { user: FirebaseUser, userData: UserData | null, creatorApplication: ApplicationData | null }) {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
@@ -108,9 +108,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
             });
             const data = await response.json();
 
-            // **FIX**: Instead of using the SDK, we redirect to the payment link from the server
             if (data.success && data.payment_link) {
-                // Redirect the user to the Cashfree payment page
                 window.location.href = data.payment_link;
             } else {
                 setMessage(`Error: ${data.message || 'Could not initiate payment.'}`);
@@ -130,28 +128,27 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
         return (
             <div className="p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col bg-zinc-800 text-center">
                  <div className="text-center">
-                    <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
-                    <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
-                </div>
-                <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50 flex-grow flex flex-col justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
-                    <p className="text-gray-300 mt-2 text-sm">
-                        {creatorApplication?.status === 'pending'
-                            ? "Your application is currently under review. Once approved, you'll be able to subscribe."
-                            : "Please update your application based on our feedback to become eligible for a subscription."
-                        }
-                    </p>
-                </div>
+                     <p className="font-semibold text-sm sm:text-base text-yellow-400">PREMIUM MEMBERSHIP</p>
+                     <h3 className="text-xl sm:text-2xl font-bold mt-1 text-white">EXCLUSIVE ACCESS</h3>
+                 </div>
+                 <div className="border border-yellow-400/50 rounded-xl p-6 my-6 sm:my-8 text-center bg-zinc-900/50 flex-grow flex flex-col justify-center">
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                     </svg>
+                     <h4 className="font-bold text-lg text-white">Profile Not Approved</h4>
+                     <p className="text-gray-300 mt-2 text-sm">
+                         {creatorApplication?.status === 'pending'
+                             ? "Your application is currently under review. Once approved, you'll be able to subscribe."
+                             : "Please update your application based on our feedback to become eligible for a subscription."
+                         }
+                     </p>
+                 </div>
             </div>
         );
     }
-    
+   
     return (
         <div className={`p-6 sm:p-8 rounded-2xl shadow-2xl flex flex-col relative overflow-hidden ${isSubscribed ? 'bg-green-700 text-white' : 'bg-zinc-800'}`}>
-            {/* The <Script> tag is no longer needed */}
             {!isSubscribed && (
                 <div className="absolute top-0 right-0 h-24 w-24">
                     <div className="absolute transform rotate-45 bg-red-600 text-center text-white font-semibold py-1 right-[-40px] top-[20px] w-[140px] shadow-lg">
@@ -212,7 +209,7 @@ function SubscriptionCard({ user, userData, creatorApplication }: { user: Fireba
     );
 }
 
-// ===== Success Modal Component =====
+// ===== Success Modal Component (No Changes) =====
 function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
     if (!isOpen) return null;
 
@@ -239,7 +236,7 @@ function SuccessModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => voi
     );
 }
 
-// --- Helper Components & Functions ---
+// --- Helper Components & Functions (No Changes) ---
 
 const formatDate = (timestamp: Timestamp | null | undefined) => {
     if (!timestamp) return "N/A";
@@ -280,90 +277,42 @@ export function ActivityIcon({ type }: { type: string }) {
     }
 }
 
-export function MobileNumberPrompt({ onSave }: { onSave: (mobileNumber: string) => Promise<void> }) {
-    const [mobileNumber, setMobileNumber] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState('');
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!mobileNumber.trim() || !/^\d{10,15}$/.test(mobileNumber)) {
-            setError('Please enter a valid mobile number (10-15 digits).');
-            return;
-        }
-        setError('');
-        setIsSaving(true);
-        try {
-            await onSave(mobileNumber);
-        } catch (err) {
-            setError('Failed to save. Please try again.');
-            console.error(err);
-        }
-        setIsSaving(false);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50 p-4">
-            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
-                <div className="mb-4 text-5xl">📱</div>
-                <h2 className="text-2xl font-bold text-gray-900">Complete Your Profile</h2>
-                <p className="text-gray-600 mt-2 mb-6">Please provide your mobile number to continue. This is required to use all features of your account.</p>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="mobileNumber" className="block text-sm font-medium text-gray-700 text-left mb-1">Mobile Number</label>
-                        <input
-                            id="mobileNumber"
-                            type="tel"
-                            value={mobileNumber}
-                            onChange={e => setMobileNumber(e.target.value)}
-                            placeholder="Enter your 10-digit mobile number"
-                            className="w-full px-4 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        {error && <p className="text-red-500 text-sm mt-2 text-left">{error}</p>}
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={isSaving}
-                        className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors"
-                    >
-                        {isSaving ? "Saving..." : "Save and Continue"}
-                    </button>
-                </form>
-            </div>
-        </div>
-    );
-}
-
-export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user: FirebaseUser, userData: UserData | null, onMobileNumberSave: (mobileNumber: string) => Promise<void> }) {
+// ===== Personal Information Component (Replaces NormalUserProfile and MobileNumberPrompt) =====
+export function PersonalInformationForm({ user, userData, isMandatory }: { user: FirebaseUser, userData: UserData | null, isMandatory: boolean }) {
     const [formData, setFormData] = useState({ fullName: '', mobileNumber: '', cityState: '', gender: '' });
     const [isSaving, setIsSaving] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
-    const [isMobileNumberMissing, setIsMobileNumberMissing] = useState(false);
+    const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
     useEffect(() => {
-        if (!user || !userData) return;
+        if (!user) return;
         setFormData({
-            fullName: userData.fullName || user.displayName || '',
-            mobileNumber: userData.mobileNumber || '',
-            cityState: userData.cityState || '',
-            gender: userData.gender || '',
+            fullName: userData?.fullName || user.displayName || '',
+            mobileNumber: userData?.mobileNumber || '',
+            cityState: userData?.cityState || '',
+            gender: userData?.gender || '',
         });
-        setIsMobileNumberMissing(!userData.mobileNumber);
     }, [user, userData]);
 
-    const handleSave = async (e: React.FormEvent | string) => {
-        let mobileNumberToSave = typeof e === 'string' ? e : formData.mobileNumber;
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setMessage(null);
 
-        if (typeof e !== 'string') {
-            e.preventDefault();
+        // --- Validation ---
+        if (!formData.fullName.trim() || formData.fullName.length < 3) {
+            setMessage({ text: 'Please enter your full name.', type: 'error' });
+            return;
         }
-
-        if (!mobileNumberToSave.trim() || !/^\d{10,15}$/.test(mobileNumberToSave)) {
-            console.error("Invalid mobile number provided.");
-            if (typeof e !== 'string') {
-                setSuccessMessage("Please enter a valid mobile number (10-15 digits).");
-                setTimeout(() => setSuccessMessage(''), 3000);
-            }
+        if (!/^[6-9]\d{9}$/.test(formData.mobileNumber)) {
+            setMessage({ text: 'Please enter a valid 10-digit mobile number.', type: 'error' });
+            return;
+        }
+        if (!formData.cityState.trim()) {
+            setMessage({ text: 'Please enter your City / State.', type: 'error' });
+            return;
+        }
+        if (!formData.gender) {
+            setMessage({ text: 'Please select your gender.', type: 'error' });
             return;
         }
 
@@ -371,24 +320,27 @@ export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user
         const userDocRef = doc(db, "users", user.uid);
         try {
             const dataToSave: UserData = {
-                ...formData,
-                mobileNumber: mobileNumberToSave,
+                ...userData, // Preserve existing data like accountType, etc.
+                fullName: formData.fullName,
+                mobileNumber: formData.mobileNumber,
+                cityState: formData.cityState,
+                gender: formData.gender,
                 email: user.email,
                 userId: user.uid,
-                accountType: 'normal',
                 updatedAt: serverTimestamp(),
             };
-            if (!userData || !userData.createdAt) {
+            // Set createdAt only if it's a new document
+            if (!userData?.createdAt) {
                 dataToSave.createdAt = serverTimestamp();
             }
             await setDoc(userDocRef, dataToSave, { merge: true });
 
-            setIsMobileNumberMissing(false);
-            setSuccessMessage('Profile updated successfully!');
-            setTimeout(() => setSuccessMessage(''), 3000);
+            setMessage({ text: 'Profile updated successfully!', type: 'success' });
+            setTimeout(() => setMessage(null), 3000);
+
         } catch (error) {
             console.error("Failed to save profile", error);
-            setSuccessMessage('Failed to save profile. Please try again.');
+            setMessage({ text: 'Failed to save profile. Please try again.', type: 'error' });
         } finally {
             setIsSaving(false);
         }
@@ -398,15 +350,20 @@ export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user
         return null;
     }
 
-    if (isMobileNumberMissing) {
-        return <MobileNumberPrompt onSave={onMobileNumberSave} />;
-    }
-
     return (
         <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
-                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold uppercase tracking-wider">Normal User</span>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Personal Information</h2>
+                    {isMandatory ? (
+                        <p className="text-red-600 mt-1 text-sm">Please complete your profile to continue.</p>
+                    ) : (
+                        <p className="text-gray-500 mt-1 text-sm">Keep your personal details up to date.</p>
+                    )}
+                </div>
+                <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold uppercase tracking-wider self-start sm:self-center">
+                    {userData?.accountType === 'creator' ? 'Creator Account' : 'Standard Account'}
+                </span>
             </div>
             <form onSubmit={handleSave} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -437,29 +394,38 @@ export function NormalUserProfile({ user, userData, onMobileNumberSave }: { user
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-between pt-4 gap-4">
-                    <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors">
-                        {isSaving ? "Saving..." : "Update Profile"}
+                    <button type="submit" disabled={isSaving} className="w-full sm:w-auto px-6 py-2.5 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 transition-colors flex items-center justify-center gap-2">
+                        <PencilSquareIcon className="w-5 h-5" />
+                        {isSaving ? "Saving..." : "Save Information"}
                     </button>
-                    {successMessage && <p className="text-green-600 text-sm font-medium">{successMessage}</p>}
+                    {message && (
+                        <p className={`text-sm font-medium ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                            {message.text}
+                        </p>
+                    )}
                 </div>
             </form>
         </div>
     );
 }
 
+// ===== Application Form (Updated to auto-fill) =====
 interface ApplicationFormProps {
     user: FirebaseUser | null | undefined;
+    userData: UserData | null; // <-- Added userData prop
     existingApplication: ApplicationData | null;
     isSubscribed: boolean;
 }
 
-export function ApplicationForm({ user, existingApplication, isSubscribed }: ApplicationFormProps) {
+export function ApplicationForm({ user, userData, existingApplication, isSubscribed }: ApplicationFormProps) {
     const [formData, setFormData] = useState({
-        fullName: existingApplication?.fullName || "",
-        mobileNumber: existingApplication?.mobileNumber || "",
-        emailAddress: existingApplication?.emailAddress || "",
-        cityState: existingApplication?.cityState || "",
-        gender: existingApplication?.gender || "",
+        // Auto-fill from existing application, fallback to user profile, then to empty
+        fullName: existingApplication?.fullName || userData?.fullName || "",
+        mobileNumber: existingApplication?.mobileNumber || userData?.mobileNumber || "",
+        emailAddress: existingApplication?.emailAddress || userData?.email || "",
+        cityState: existingApplication?.cityState || userData?.cityState || "",
+        gender: existingApplication?.gender || userData?.gender || "",
+        // --- Creator specific fields ---
         instagramUsername: existingApplication?.instagramUsername || "",
         instagramProfileLink: existingApplication?.instagramProfileLink || "",
         totalFollowers: existingApplication?.totalFollowers || "",
@@ -473,6 +439,7 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
         deliveryDuration: existingApplication?.deliveryDuration || "",
     });
 
+    // ... rest of the ApplicationForm component is unchanged ...
     const [image, setImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | ArrayBuffer | null>(
         existingApplication?.profilePictureUrl || null
@@ -540,7 +507,7 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                 await uploadBytes(imageRef, image);
                 imageUrl = await getDownloadURL(imageRef);
             }
-            
+           
             const dataToSend = {
                 ...formData,
                 profilePictureUrl: imageUrl,
@@ -577,12 +544,12 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
 
             <div className="bg-gradient-to-r from-purple-600 to-purple-800 p-4 sm:p-6 text-white">
                 <h1 className="text-xl sm:text-2xl font-bold mb-1 sm:mb-2">
-                    {existingApplication ? "Update Your Application" : "Creator Application Form"}
+                    {existingApplication ? "Update Your Creator Profile" : "Become a Creator"}
                 </h1>
                 <p className="text-purple-100 text-sm sm:text-base">
                     {existingApplication
-                        ? "Make changes to your application details"
-                        : "Join our network of talented creators and collaborate with top brands"}
+                        ? "Make changes to your application details below."
+                        : "Join our network of talented creators and collaborate with top brands."}
                 </p>
             </div>
 
@@ -596,6 +563,7 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
                 )}
 
                 <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
+                    {/* The rest of the form JSX is unchanged */}
                     <div className="space-y-4 sm:space-y-6">
                         <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-b pb-2">Personal Details</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -785,6 +753,7 @@ export function ApplicationForm({ user, existingApplication, isSubscribed }: App
     );
 }
 
+// ===== Application Status Component (No changes)=====
 export function ApplicationStatus({ application }: { application: ApplicationData | null }) {
     if (!application) {
         return (
@@ -939,6 +908,7 @@ export function ApplicationStatus({ application }: { application: ApplicationDat
     );
 }
 
+// ===== Main Page & Dashboard =====
 export default function CreatorDashboardPage() {
     return (
         <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
@@ -954,41 +924,22 @@ function CreatorDashboard() {
     const [creatorData, setCreatorData] = useState<ApplicationData | null>(null);
     const [loading, setLoading] = useState(true);
     const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
-    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('profile'); 
+    const [view, setView] = useState<'dashboard' | 'applicationForm' | 'profile'>('dashboard');
 
-
-    // Effect for User Data, Creator Data & Account Type
+    // Effect for fetching all user-related data
     useEffect(() => {
         if (!user) {
-            setLoading(false);
             router.push('/login');
             return;
         }
 
         const userDocRef = doc(db, "users", user.uid);
-        const unsubscribeUser = onSnapshot(userDocRef, async (userSnap) => {
-            let fetchedUserData: UserData | null = null;
+        const unsubscribeUser = onSnapshot(userDocRef, (userSnap) => {
             if (userSnap.exists()) {
-                fetchedUserData = userSnap.data() as UserData;
+                const fetchedUserData = userSnap.data() as UserData;
                 setUserData(fetchedUserData);
-
-                if (fetchedUserData.subscriptionStatus === 'active' && fetchedUserData.subscriptionExpiresAt) {
-                    const now = new Date();
-                    const expiryDate = fetchedUserData.subscriptionExpiresAt.toDate();
-                    if (now > expiryDate) {
-                        console.log("Subscription expired. Setting to inactive.");
-                        await updateDoc(userDocRef, {
-                            subscriptionStatus: 'inactive',
-                            updatedAt: serverTimestamp(),
-                        });
-                        fetchedUserData.subscriptionStatus = 'inactive'; 
-                    }
-                }
-
-                if (!fetchedUserData.mobileNumber) {
-                    setView('profile');
-                }
             } else {
+                // If user document doesn't exist, create a basic one
                 const initialData: UserData = {
                     userId: user.uid,
                     email: user.email,
@@ -997,95 +948,39 @@ function CreatorDashboard() {
                     accountType: 'normal',
                     subscriptionStatus: 'inactive',
                 };
-                await setDoc(userDocRef, initialData, { merge: true });
-                fetchedUserData = initialData;
+                setDoc(userDocRef, initialData);
                 setUserData(initialData);
-                setView('profile');
             }
+        });
 
-            const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
-            const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
-                if (!snapshot.empty) {
-                    const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
-                    setCreatorData(data);
+        const qCreator = query(collection(db, "creatorApplications"), where("userId", "==", user.uid), limit(1));
+        const unsubscribeCreator = onSnapshot(qCreator, async (snapshot) => {
+            if (!snapshot.empty) {
+                const data = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as ApplicationData;
+                setCreatorData(data);
+                // Ensure user accountType is 'creator' in their user doc
+                await setDoc(doc(db, "users", user.uid), { accountType: 'creator' }, { merge: true });
 
-                    if (fetchedUserData?.accountType !== 'creator') {
-                        try {
-                            await setDoc(userDocRef, { accountType: 'creator' }, { merge: true });
-                        } catch (error) {
-                            console.error("Error updating user account type to creator:", error);
-                        }
-                    }
-                    
-                    if (view !== 'profile' && view !== 'applicationForm') {
-                         setView('dashboard');
-                    }
-                    if (!fetchedUserData?.mobileNumber) {
-                        setView('profile');
-                    } else if (view !== 'applicationForm' && view !== 'profile') {
-                         setView('dashboard');
-                    }
-
-
-                    const activities: Activity[] = [];
-                    if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
-                    if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
-                        activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
-                    } else if (data.updatedAt && !data.timestamp) {
-                        activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
-                    }
-
-                    if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
-                    setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
-
-                } else {
-                    setCreatorData(null);
-                    if (fetchedUserData?.accountType !== 'normal') {
-                        try {
-                            await setDoc(userDocRef, { accountType: 'normal' }, { merge: true });
-                        } catch (error) {
-                            console.error("Error updating user account type to normal:", error);
-                        }
-                    }
-                   
-                    if (!fetchedUserData?.mobileNumber) {
-                        setView('profile');
-                    } else {
-                        setView('applicationForm');
-                    }
+                const activities: Activity[] = [];
+                if (data.timestamp) activities.push({ type: 'submitted', description: 'Your creator application was submitted.', time: formatDate(data.timestamp) });
+                if (data.updatedAt && data.timestamp && data.updatedAt.toMillis() !== data.timestamp.toMillis()) {
+                    activities.push({ type: 'update', description: 'Your profile was recently updated.', time: formatDate(data.updatedAt) });
                 }
-                setLoading(false);
-            }, (error) => {
-                console.error("Error fetching creator data:", error);
-                setLoading(false);
-            });
+                if (data.status === 'approved') activities.push({ type: 'approved', description: 'Congratulations! Your application was approved.', time: formatDate(data.updatedAt || data.timestamp) });
+                setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()));
 
-            return () => unsubscribeCreator();
-        }, (error) => {
-            console.error("Error fetching user data:", error);
+            } else {
+                setCreatorData(null);
+                await setDoc(doc(db, "users", user.uid), { accountType: 'normal' }, { merge: true });
+            }
             setLoading(false);
         });
 
-        return () => unsubscribeUser();
-    }, [user, router, view]);
-
-    const handleMobileNumberSave = async (mobileNumber: string) => {
-        if (!user) throw new Error("User not authenticated.");
-        const userDocRef = doc(db, "users", user.uid);
-        try {
-            await updateDoc(userDocRef, { mobileNumber: mobileNumber, updatedAt: serverTimestamp() });
-            setUserData(prev => prev ? { ...prev, mobileNumber: mobileNumber } : null); 
-            
-            if (creatorData) {
-                setView('dashboard');
-            } else {
-                setView('applicationForm');
-            }
-        } catch (error) {
-            console.error("Failed to save mobile number from prompt:", error);
-            throw error;
-        }
-    };
+        return () => {
+            unsubscribeUser();
+            unsubscribeCreator();
+        };
+    }, [user, router]);
 
 
     if (loading) {
@@ -1097,25 +992,45 @@ function CreatorDashboard() {
     }
 
     if (!user || !userData) {
-        return null;
+        return null; // Or a redirect component
+    }
+
+    // --- Core Logic: Check if personal information is complete ---
+    const isProfileComplete = !!(userData.fullName && userData.mobileNumber && userData.cityState && userData.gender);
+
+    // --- If profile is NOT complete, force the user to fill it out ---
+    if (!isProfileComplete) {
+        return (
+            <div className="container mx-auto px-4 py-8 max-w-4xl">
+                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-8">
+                    <div className="flex">
+                        <div className="py-1"><svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zM9 5v6h2V5H9zm0 8h2v-2H9v2z"/></svg></div>
+                        <div>
+                            <p className="font-bold">Action Required</p>
+                            <p className="text-sm">Welcome! Please complete your personal information to access the dashboard and all website features.</p>
+                        </div>
+                    </div>
+                </div>
+                <PersonalInformationForm user={user} userData={userData} isMandatory={true} />
+            </div>
+        )
     }
 
     const isUserSubscribed = userData?.subscriptionStatus === 'active' &&
         (userData?.subscriptionExpiresAt?.toDate() ?? new Date(0)) > new Date();
 
     const renderMainContent = () => {
-        if (!userData.mobileNumber) {
-            return <NormalUserProfile user={user} userData={userData} onMobileNumberSave={handleMobileNumberSave} />;
-        }
-
         switch (view) {
             case 'profile':
-                return <NormalUserProfile user={user} userData={userData} onMobileNumberSave={handleMobileNumberSave} />;
+                return <PersonalInformationForm user={user} userData={userData} isMandatory={false} />;
+
             case 'applicationForm':
-                return <ApplicationForm user={user} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
+                return <ApplicationForm user={user} userData={userData} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
+            
             case 'dashboard':
             default:
                 if (creatorData) {
+                    // --- CREATOR'S DASHBOARD VIEW ---
                     const statusDisplay = {
                         "approved": { text: "Approved", color: "text-green-700", bgColor: "bg-green-100" },
                         "rejected": { text: "Rejected", color: "text-red-700", bgColor: "bg-red-100" },
@@ -1134,149 +1049,94 @@ function CreatorDashboard() {
                                         height={120}
                                         className="w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-purple-200 shadow-sm"
                                     />
-                                    <div className="flex-1 text-center sm:text-left space-y-1">
-                                        <div className="flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 sm:gap-3">
-                                            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
-                                            <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold uppercase tracking-wider">Creator</span>
-                                        </div>
+                                    <div className="flex-1 text-center sm:text-left space-y-2">
+                                        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{creatorData.fullName}</h2>
                                         <a
                                             href={creatorData.instagramProfileLink}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="text-purple-600 hover:underline font-medium text-sm sm:text-base"
+                                            className="text-purple-600 hover:underline font-medium text-sm sm:text-base inline-block"
                                         >
                                             @{creatorData.instagramUsername}
                                         </a>
                                     </div>
-                                    <button onClick={() => setView('applicationForm')} className="w-full sm:w-auto mt-4 sm:mt-0 inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer">
-                                        Manage Application
+                                    <button onClick={() => setView('applicationForm')} className="w-full sm:w-auto mt-4 sm:mt-0 inline-flex justify-center items-center px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 transition-colors shadow-md cursor-pointer gap-2">
+                                        <PencilSquareIcon className="w-5 h-5"/> Manage Creator Profile
                                     </button>
                                 </div>
                                 <div className="mt-8 pt-8 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 bg-purple-50 rounded-xl p-4">
-                                    <InfoCard
-                                        title="Followers"
-                                        value={creatorData.totalFollowers || 'N/A'}
-                                        icon={<UsersIcon className="w-6 h-6" />}
-                                    />
-                                    <InfoCard
-                                        title="Avg. Reel Views"
-                                        value={creatorData.avgReelViews || 'N/A'}
-                                        icon={<PlayIcon className="w-6 h-6" />}
-                                    />
-                                    <InfoCard
-                                        title="Avg. Story Views"
-                                        value={creatorData.storyAverageViews || 'N/A'}
-                                        icon={<EyeIcon className="w-6 h-6" />}
-                                    />
+                                    <InfoCard title="Followers" value={creatorData.totalFollowers || 'N/A'} icon={<UsersIcon className="w-6 h-6" />} />
+                                    <InfoCard title="Avg. Reel Views" value={creatorData.avgReelViews || 'N/A'} icon={<PlayIcon className="w-6 h-6" />} />
+                                    <InfoCard title="Avg. Story Views" value={creatorData.storyAverageViews || 'N/A'} icon={<EyeIcon className="w-6 h-6" />} />
                                 </div>
-                            </div>
-
-                            {/* Application Status (for creators) */}
-                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">Application Status</h3>
-                                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${statusDisplay.bgColor} ${statusDisplay.color}`}>
-                                    {statusDisplay.text}
-                                </div>
-                                <p className="text-sm text-gray-600 mt-3">{creatorData.status === 'pending' ? 'Our team is reviewing your profile.' : 'You are a verified creator!'}</p>
-                                {creatorData.status === 'rejected' && creatorData.adminFeedback && (
-                                    <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
-                                        <p className="font-semibold mb-1">Admin Feedback:</p>
-                                        <p>{creatorData.adminFeedback}</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Recent Activity (for creators) */}
-                            <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Activity</h3>
-                                <ul className="space-y-4">
-                                    {recentActivity.length > 0 ?
-                                        recentActivity.map((activity, index) => (
-                                            <li key={index} className="flex items-center gap-4">
-                                                <ActivityIcon type={activity.type} />
-                                                <div>
-                                                    <p className="text-sm font-medium text-gray-800">{activity.description}</p>
-                                                    <p className="text-xs text-gray-500">{activity.time}</p>
-                                                </div>
-                                            </li>
-                                        )) : (
-                                            <p className="text-sm text-gray-500">No recent activity.</p>
-                                        )}
-                                </ul>
                             </div>
                         </>
                     );
                 } else {
-                    return <ApplicationForm user={user} existingApplication={creatorData} isSubscribed={isUserSubscribed} />;
+                    // --- NORMAL USER'S DASHBOARD VIEW ---
+                    return (
+                         <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
+                            <SparklesIcon className="w-16 h-16 mx-auto text-purple-500 mb-4"/>
+                            <h2 className="text-2xl font-bold text-gray-900">Ready to Become a Creator?</h2>
+                            <p className="text-gray-600 mt-2 mb-6 max-w-xl mx-auto">
+                                Join our exclusive network of influencers and start collaborating with amazing brands. Apply today to unlock new opportunities!
+                            </p>
+                             <button onClick={() => setView('applicationForm')} className="inline-flex items-center justify-center px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold text-base hover:from-purple-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg cursor-pointer gap-2">
+                                 Become a Creator Now
+                            </button>
+                         </div>
+                    )
                 }
         }
     };
 
 
+    // --- This is the main return for a user with a COMPLETE profile ---
     return (
         <div className="container mx-auto px-4 py-8 space-y-8 mb-24">
-            {creatorData && (
-                <div className="bg-gradient-to-br from-purple-800 via-indigo-800 to-purple-900 text-white p-6 sm:p-8 rounded-2xl shadow-2xl relative overflow-hidden">
-                    <div className="absolute -top-10 -right-10 w-48 h-48 bg-white/5 rounded-full filter blur-2xl"></div>
-                    <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-white/5 rounded-full filter blur-2xl"></div>
-                    <div className="relative z-10">
-                        <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start gap-4">
-                            <div className="flex items-center gap-4">
-                                <span className="p-2 rounded-xl bg-purple-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-yellow-400">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.92 19.4a.562.562 0 0 1-.84-.61l1.285-5.385a.562.562 0 0 0-.182-.557L3.92 9.499a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
-                                    </svg>
-                                </span>
-                                <h2 className="text-xl sm:text-2xl font-bold tracking-wider uppercase">Creator Pro</h2>
-                            </div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${isUserSubscribed ? 'bg-green-600 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
-                                {isUserSubscribed ? 'Active' : 'Inactive'}
-                            </span>
-                        </div>
-                        <p className="mt-4 sm:mt-8 text-sm text-purple-200 text-center sm:text-left">
-                            {isUserSubscribed ? `Your premium subscription is active until ${formatDate(userData.subscriptionExpiresAt)}.` : 'Your subscription has expired or is inactive. Please renew to continue enjoying premium features.'}
-                        </p>
-                    </div>
+            
+            {/* Header section with view-switching buttons */}
+            <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome, {userData.fullName || 'User'}!</h2>
+                    <p className="text-gray-500 text-sm sm:text-base">
+                        {userData.accountType === 'creator' ? "Creator Dashboard" : "My Dashboard"}
+                    </p>
                 </div>
-            )}
-
+                <div className="flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-end">
+                    {/* Main Dashboard / Home View */}
+                    <button
+                        onClick={() => setView('dashboard')}
+                        className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'dashboard' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        title="Dashboard"
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
+                         <span className="hidden sm:inline">Dashboard</span>
+                    </button>
+                    {/* Personal Profile Edit View */}
+                    <button
+                        onClick={() => setView('profile')}
+                        className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'profile' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        title="Edit My Profile"
+                    >
+                        <UserCircleIcon className="h-5 w-5"/> <span className="hidden sm:inline">My Profile</span>
+                    </button>
+                     {/* Creator Application View (Always available) */}
+                    <button
+                        onClick={() => setView('applicationForm')}
+                        className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'applicationForm' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        title={creatorData ? "Manage Creator Profile" : "Become a Creator"}
+                    >
+                        <DocumentTextIcon className="h-5 w-5"/>
+                        <span className="hidden sm:inline">
+                            {creatorData ? "Creator Profile" : "Apply"}
+                        </span>
+                    </button>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome, {userData.fullName || 'User'}!</h2>
-                            <p className="text-gray-500 text-sm sm:text-base">{userData.accountType === 'creator' ? "Creator Account" : "Standard Account"}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2 sm:gap-3 justify-center sm:justify-end">
-                            <button
-                                onClick={() => setView('profile')}
-                                className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'profile' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                title="My Profile"
-                            >
-                                <UserCircleIcon className="h-5 w-5"/> <span className="hidden sm:inline">Profile</span>
-                            </button>
-                            <button
-                                onClick={() => setView('applicationForm')}
-                                className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'applicationForm' || !creatorData ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                title="Creator Application"
-                            >
-                                <DocumentTextIcon className="h-5 w-5"/> <span className="hidden sm:inline">Application</span>
-                            </button>
-                            {creatorData?.status === 'approved' && (
-                                <button
-                                    onClick={() => setView('dashboard')}
-                                    className={`p-3 rounded-lg flex items-center gap-2 text-sm sm:text-base ${view === 'dashboard' && creatorData?.status === 'approved' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                    title="Creator Dashboard"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25v9m-4.5 0l4.5 4.5M3 12h9.75M3 18h9.75" />
-                                    </svg> <span className="hidden sm:inline">Dashboard</span>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
                     {renderMainContent()}
                 </div>
 
