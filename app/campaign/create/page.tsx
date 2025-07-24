@@ -418,11 +418,11 @@ const CampaignCreationPage = () => {
         setErrors({});
     };
 
-    const getServiceFee = (creators: number): number => {
-        if (creators <= 0) return 0;
-        const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
-        return applicableTier ? applicableTier.fee : (SERVICE_F2EE_TIERS[0]?.fee || 0);
-    };
+   const getServiceFee = (creators: number): number => {
+    if (creators <= 0) return 0;
+    const applicableTier = SERVICE_FEE_TIERS.slice().reverse().find(tier => creators >= tier.creators);
+    return applicableTier ? applicableTier.fee : (SERVICE_FEE_TIERS[0]?.fee || 0);
+};
 
     const { creatorsCost, serviceFee, totalAmount } = useMemo(() => {
         const creatorsCost = Number(formData.totalCreatorBudget) || 0;

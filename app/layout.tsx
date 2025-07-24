@@ -1,6 +1,6 @@
 // app/layout.tsx
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next"; // Import Viewport
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -124,10 +124,12 @@ export const metadata: Metadata = {
   authors: [{ name: "Alphabinet", url: "https://www.alphabinet.com" }],
   creator: "Alphabinet", // Indicates who created the content/website
   publisher: "Alphabinet", // Indicates who published the content/website (often the same as creator for a website)
+};
 
-  // Additional Meta Tags (optional but good practice)
-  colorScheme: "light dark", // Indicate support for both light and dark modes
+// Viewport for theme and color scheme (moved here)
+export const viewport: Viewport = {
   themeColor: "#4B0082", // A dominant color from your brand (e.g., a shade of purple)
+  colorScheme: "light dark", // Indicate support for both light and dark modes
 };
 
 export default function RootLayout({
