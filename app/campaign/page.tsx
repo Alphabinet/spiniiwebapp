@@ -111,13 +111,13 @@ const SubscriptionPromptModal = ({ open, onOpenChange }: { open: boolean; onOpen
                     </div>
                     <DialogTitle className="text-center text-2xl font-bold mt-4">Subscription Required</DialogTitle>
                     <DialogDescription className="text-center mt-2">
-                        An active subscription is needed to apply for campaigns. Please upgrade your plan to unlock this feature.
+                        An active subscription is needed to apply for campaigns. Please upgrade your Creator Pro plan to unlock this feature.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter className="sm:justify-center pt-4">
                      <Button
                         onClick={() => {
-                            router.push('/subscribe'); // Assumes '/subscribe' is your subscription page
+                            router.push('/dashboard'); //  '/dashboard' is your subscription page
                             onOpenChange(false);
                         }}
                         className="w-full text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
@@ -619,7 +619,7 @@ const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile
                         <LogIn className="w-4 h-4 mr-2" />Login to Apply
                     </Button>
                 ) : userProfile?.accountType !== 'creator' ? (
-                    <Button className="w-full" disabled><XCircle className="w-4 h-4 mr-2" />Membership Creators Only</Button>
+                    <Button className="w-full" disabled><XCircle className="w-4 h-4 mr-2" />Subscription Required</Button>
                 ) : isApplied ? (
                     <Button variant="destructive" className="w-full" onClick={onUnapply} disabled={isProcessing}>
                         {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XIcon className="w-4 h-4 mr-2" />}Withdraw

@@ -564,8 +564,17 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
             setUploading(false);
         }
     };
-
-    const contentCategories = ["Fashion", "Tech", "Comedy", "Fitness", "Beauty", "Travel", "Food", "Gaming", "Lifestyle", "Education", "DIY", "Art", "Music", "Dance", "Vlogging", "Health & Wellness"];
+    
+    // ===== UPDATED CATEGORIES ARRAY =====
+    const contentCategories = [
+        'Fashion', 'Beauty', 'Lifestyle', 'Fitness', 'Travel', 'Food', 'Technology',
+        'Gaming', 'Comedy', 'Motivation', 'Music', 'Dance', 'Photography', 'Art',
+        'DIY (Do It Yourself)', 'Education', 'Finance', 'Health & Wellness', 'Parenting',
+        'Pets', 'Cars & Automobiles', "Men's Grooming", 'Home Decor', 'Spirituality',
+        'Acting', 'Reviews & Unboxing', 'Astrology', 'Modeling', 'Vlogger',
+        'Books & Reading', 'Makeup', 'Nails & Nail Art', 'Skincare',
+        'Saree & Ethnic Wear', 'Luxury Lifestyle', 'Entertainment'
+    ];
     const genders = ["Male", "Female", "Other", "Prefer not to say"];
 
     return (
@@ -863,59 +872,59 @@ export function ApplicationStatus({ application }: { application: ApplicationDat
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="border-t border-gray-200 pt-5 sm:pt-6">
-                        <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Pricing Information</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel Price</h3>
-                                <p className="text-base sm:text-lg font-bold">₹{application.reelPrice}</p>
-                            </div>
-                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Story Price</h3>
-                                <p className="text-base sm:text-lg font-bold">₹{application.storyPrice}</p>
-                            </div>
-                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel + Story</h3>
-                                <p className="text-base sm:text-lg font-bold">₹{application.reelsStoryPrice}</p>
+                        <div className="border-t border-gray-200 pt-5 sm:pt-6">
+                            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4">Pricing Information</h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel Price</h3>
+                                    <p className="text-base sm:text-lg font-bold">₹{application.reelPrice}</p>
+                                </div>
+                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Story Price</h3>
+                                    <p className="text-base sm:text-lg font-bold">₹{application.storyPrice}</p>
+                                </div>
+                                <div className="bg-gray-50 p-3 sm:p-4 rounded-lg border border-gray-200">
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500 mb-1">Reel + Story</h3>
+                                    <p className="text-base sm:text-lg font-bold">₹{application.reelsStoryPrice}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div className="sm:pl-4">
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
-                        <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4">Profile Information</h2>
-                        {application.profilePictureUrl ? (
-                            <div className="mb-3 sm:mb-4">
-                                <Image src={application.profilePictureUrl} alt="Profile" width={128} height={128} className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg object-cover mx-auto border-2 border-gray-300" />
-                            </div>
-                        ) : (
-                            <div className="bg-gray-200 border-2 border-dashed rounded-xl w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
-                                <svg className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 012-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                            </div>
-                        )}
-                        <div className="space-y-2 sm:space-y-3">
-                            <div>
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Email</h3>
-                                <p className="font-medium text-sm sm:text-base">{application.emailAddress}</p>
-                            </div>
-                            <div>
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Phone</h3>
-                                <p className="font-medium text-sm sm:text-base">{application.mobileNumber}</p>
-                            </div>
-                            <div>
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Location</h3>
-                                <p className="font-medium text-sm sm:text-base">{application.cityState}</p>
-                            </div>
-                            <div>
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Gender</h3>
-                                <p className="font-medium text-sm sm:text-base">{application.gender}</p>
-                            </div>
-                            <div>
-                                <h3 className="text-xs sm:text-sm font-medium text-gray-500">Delivery Time</h3>
-                                <p className="font-medium text-sm sm:text-base">{application.deliveryDuration}</p>
+                    <div className="sm:pl-4">
+                        <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
+                            <h2 className="text-base sm:text-lg font-bold text-gray-800 mb-3 sm:mb-4">Profile Information</h2>
+                            {application.profilePictureUrl ? (
+                                <div className="mb-3 sm:mb-4">
+                                    <Image src={application.profilePictureUrl} alt="Profile" width={128} height={128} className="w-24 h-24 sm:w-32 sm:h-32 rounded-lg object-cover mx-auto border-2 border-gray-300" />
+                                </div>
+                            ) : (
+                                <div className="bg-gray-200 border-2 border-dashed rounded-xl w-24 h-24 sm:w-32 sm:h-32 mx-auto mb-3 sm:mb-4 flex items-center justify-center">
+                                    <svg className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 012-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                            )}
+                            <div className="space-y-2 sm:space-y-3">
+                                <div>
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Email</h3>
+                                    <p className="font-medium text-sm sm:text-base">{application.emailAddress}</p>
+                                </div>
+                                <div>
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Phone</h3>
+                                    <p className="font-medium text-sm sm:text-base">{application.mobileNumber}</p>
+                                </div>
+                                <div>
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Location</h3>
+                                    <p className="font-medium text-sm sm:text-base">{application.cityState}</p>
+                                </div>
+                                <div>
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Gender</h3>
+                                    <p className="font-medium text-sm sm:text-base">{application.gender}</p>
+                                </div>
+                                <div>
+                                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Delivery Time</h3>
+                                    <p className="font-medium text-sm sm:text-base">{application.deliveryDuration}</p>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -5,9 +5,9 @@ import { db } from '@/lib/firebaseConfig';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, where, getDoc, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import { Instagram } from 'lucide-react'; // Import Instagram icon
+import { Instagram } from 'lucide-react';
 
-// Re-defining types locally for clarity within the immersive
+// Re-defining types locally
 interface FirestoreTimestamp {
   seconds: number;
   nanoseconds: number;
@@ -19,8 +19,8 @@ interface CampaignApplicantDoc {
   userName?: string;
   userEmail?: string;
   userPhone?: string;
-  instagramUsername?: string; // Added Instagram username field
-  instagramProfile?: string; // Already exists
+  instagramUsername?: string;
+  instagramProfile?: string;
   appliedAt: FirestoreTimestamp;
   status: 'pending' | 'approved' | 'rejected';
 }
@@ -56,13 +56,11 @@ const STATUS_OPTIONS = [
 
 const formatDate = (dateInput: FirestoreTimestamp | string | null | undefined): string => {
   if (!dateInput) return 'N/A';
-
   try {
     const date = typeof dateInput === 'string'
       ? new Date(dateInput)
       : new Date(dateInput.seconds * 1000 + dateInput.nanoseconds / 1000000);
-
-    return isNaN(date.getTime()) ? 'Invalid Date' : format(date, 'MMM d,yyyy, h:mm a');
+    return isNaN(date.getTime()) ? 'Invalid Date' : format(date, 'MMM d, yyyy, h:mm a');
   } catch (error) {
     console.error("Date formatting error:", error);
     return 'Invalid Date';
@@ -98,6 +96,7 @@ const CampaignsPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
   const [userDetails, setUserDetails] = useState<Record<string, {phone?: string, instagramProfile?: string, instagramUsername?: string}>>({});
+  const [creatorDetails, setCreatorDetails] = useState<Record<string, { phone?: string }>>({});
   const [isMobile, setIsMobile] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -114,11 +113,9 @@ const CampaignsPage = () => {
         closeDialog();
       }
     };
-
     if (isDialogOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -128,26 +125,21 @@ const CampaignsPage = () => {
     let unsubscribeCampaigns: () => void;
     const unsubscribes: (() => void)[] = [];
     setError(null);
-
     try {
       const campaignsQuery = query(
         collection(db, "campaigns"),
         orderBy("createdAt", "desc")
       );
-
       unsubscribeCampaigns = onSnapshot(campaignsQuery, async (campaignsSnapshot) => {
         setLoading(true);
         const campaignsData = campaignsSnapshot.docs.map(mapFirestoreDocToCampaign);
-
         unsubscribes.forEach(unsub => unsub());
         unsubscribes.length = 0;
-
         for (const campaign of campaignsData) {
           const applicantsQuery = query(
             collection(db, `campaigns/${campaign.id}/applicants`),
-            where("status", "==", "pending") // Only listen to pending for real-time updates
+            where("status", "==", "pending")
           );
-
           const unsubscribe = onSnapshot(applicantsQuery, (applicantsSnapshot) => {
             setCampaigns(prev => prev.map(c =>
               c.id === campaign.id
@@ -162,15 +154,12 @@ const CampaignsPage = () => {
           }, (error) => {
             console.error(`Applicant listener error for campaign ${campaign.id}:`, error);
           });
-
           unsubscribes.push(unsubscribe);
         }
-
         setCampaigns(campaignsData.map(campaign => ({
           ...campaign,
-          applicants: [] // Initialize applicants as empty, will be populated by sub-listeners
+          applicants: []
         })));
-
         setLoading(false);
       }, (error) => {
         console.error("Campaign listener error:", error);
@@ -182,23 +171,61 @@ const CampaignsPage = () => {
       setError("Initialization failed. Please check your connection.");
       setLoading(false);
     }
-
     return () => {
       unsubscribeCampaigns?.();
       unsubscribes.forEach(unsub => unsub());
     };
   }, []);
+  
+  useEffect(() => {
+    const fetchCreatorDetails = async (uids: string[]) => {
+      const uidsToFetch = uids.filter(uid => uid && !creatorDetails[uid]);
+      if (uidsToFetch.length === 0) return;
+
+      const fetchPromises = uidsToFetch.map(async (uid) => {
+        try {
+          const userDoc = await getDoc(doc(db, "users", uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            return {
+              uid,
+              phone: userData.phoneNumber || userData.mobileNumber || 'Not Provided',
+            };
+          }
+        } catch (error) {
+          console.error(`Failed to fetch creator details for UID ${uid}`, error);
+        }
+        return null;
+      });
+
+      const results = await Promise.all(fetchPromises);
+      const newDetails: Record<string, { phone?: string }> = {};
+      results.forEach(result => {
+        if (result) {
+          newDetails[result.uid] = { phone: result.phone };
+        }
+      });
+
+      if (Object.keys(newDetails).length > 0) {
+        setCreatorDetails(prev => ({ ...prev, ...newDetails }));
+      }
+    };
+
+    const creatorUids = campaigns
+      .map(campaign => campaign.userInfo?.uid)
+      .filter((uid): uid is string => !!uid);
+
+    if (creatorUids.length > 0) {
+      fetchCreatorDetails([...new Set(creatorUids)]);
+    }
+  }, [campaigns, creatorDetails]);
 
   const updateCampaignStatus = useCallback(async (campaignId: string, newStatus: CampaignDoc['status']) => {
     if (!db) return;
-
-    // Optimistically update UI
     setCampaigns(prev => prev.map(campaign =>
       campaign.id === campaignId ? { ...campaign, status: newStatus } : campaign
     ));
-
     setUpdatingCampaigns(prev => ({ ...prev, [campaignId]: true }));
-
     try {
       const campaignRef = doc(db, "campaigns", campaignId);
       await updateDoc(campaignRef, {
@@ -209,8 +236,6 @@ const CampaignsPage = () => {
     } catch (error) {
       console.error("Update failed:", error);
       toast.error("Update failed. Please try again.");
-
-      // Revert UI on error
       const originalCampaign = campaigns.find(c => c.id === campaignId);
       setCampaigns(prev => prev.map(campaign =>
         campaign.id === campaignId
@@ -242,7 +267,7 @@ const CampaignsPage = () => {
               userId,
               phone: userData.phoneNumber || userData.mobileNumber || 'No phone provided',
               instagramProfile: userData.instagramProfile || userData.instagram || 'Not provided',
-              instagramUsername: userData.instagramUsername || 'Not provided' // Fetch username from user profile
+              instagramUsername: userData.instagramUsername || 'Not provided'
             };
           }
         } catch (error) {
@@ -261,7 +286,6 @@ const CampaignsPage = () => {
           };
         }
       });
-
       if (Object.keys(newUserDetails).length > 0) {
         setUserDetails(prev => ({ ...prev, ...newUserDetails }));
       }
@@ -274,24 +298,21 @@ const CampaignsPage = () => {
     try {
       const campaignRef = doc(db, "campaigns", campaign.id);
       const docSnap = await getDoc(campaignRef);
-
       let updatedCampaign = campaign;
       if (docSnap.exists()) {
         updatedCampaign = {
           ...mapFirestoreDocToCampaign(docSnap) as CampaignWithDetails,
-          applicants: campaign.applicants // Keep existing applicants from real-time listener
+          applicants: campaign.applicants
         };
       }
-
       if (updatedCampaign.applicants.length > 0) {
         await fetchUserDetails(updatedCampaign.applicants);
       }
-
       setSelectedCampaign(updatedCampaign);
       setIsDialogOpen(true);
     } catch (error) {
       console.error("Error fetching campaign details:", error);
-      setSelectedCampaign(campaign); // Fallback to showing existing data if fetch fails
+      setSelectedCampaign(campaign);
       setIsDialogOpen(true);
     }
   };
@@ -303,17 +324,14 @@ const CampaignsPage = () => {
 
   const filteredCampaigns = useMemo(() => {
     let result = campaigns;
-
     if (statusFilter !== 'all') {
       result = result.filter(campaign => campaign.status === statusFilter);
     }
-
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       result = result.filter(campaign => {
         const matchesCampaign = (campaign.campaignName || '').toLowerCase().includes(term) ||
           (campaign.brandName || '').toLowerCase().includes(term);
-
         const matchesApplicant = campaign.applicants.some(applicant =>
           (applicant.userName || '').toLowerCase().includes(term) ||
           (applicant.userEmail || '').toLowerCase().includes(term) ||
@@ -321,11 +339,9 @@ const CampaignsPage = () => {
           (applicant.instagramUsername || userDetails[applicant.userId]?.instagramUsername || '').toLowerCase().includes(term) ||
           (applicant.instagramProfile || userDetails[applicant.userId]?.instagramProfile || '').toLowerCase().includes(term)
         );
-
         return matchesCampaign || matchesApplicant;
       });
     }
-
     return result;
   }, [campaigns, searchTerm, statusFilter, userDetails]);
 
@@ -341,7 +357,6 @@ const CampaignsPage = () => {
       approved: 'bg-green-100 text-green-800',
       rejected: 'bg-red-100 text-red-800',
     };
-
     return statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
   };
 
@@ -383,8 +398,7 @@ const CampaignsPage = () => {
   }
 
   return (
-    <div className="space-y-6 p-2 sm:p-4 pb-20"> {/* Added pb-20 here */}
-      {/* Campaign Details Dialog */}
+    <div className="space-y-6 p-2 sm:p-4 pb-20">
       {isDialogOpen && selectedCampaign && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
           <div
@@ -450,6 +464,12 @@ const CampaignsPage = () => {
                           <span className="font-medium text-gray-800">{selectedCampaign.userInfo.email || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
+                          <span className="text-gray-600">Phone</span>
+                          <span className="font-medium text-gray-800">
+                            {creatorDetails[selectedCampaign.userInfo.uid]?.phone || 'Loading...'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
                           <span className="text-gray-600">User ID</span>
                           <span className="font-medium text-gray-800 truncate max-w-[200px]">{selectedCampaign.userInfo.uid}</span>
                         </div>
@@ -485,7 +505,7 @@ const CampaignsPage = () => {
                               <span>{getApplicantPhone(applicant)}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Instagram className="h-4 w-4 text-gray-400" /> {/* Instagram Icon */}
+                              <Instagram className="h-4 w-4 text-gray-400" />
                               <span className="truncate">
                                 {applicant.instagramUsername || applicant.instagramProfile ? (
                                   <a 
@@ -545,7 +565,6 @@ const CampaignsPage = () => {
         </div>
       )}
 
-      {/* Main Content */}
       <header className="flex flex-col gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800">Campaign Management</h1>
@@ -593,7 +612,6 @@ const CampaignsPage = () => {
         </div>
       </header>
 
-      {/* Mobile Cards View */}
       {isMobile ? (
         <div className="space-y-4">
           {paginatedCampaigns.length > 0 ? (
@@ -681,7 +699,6 @@ const CampaignsPage = () => {
           )}
         </div>
       ) : (
-        /* Desktop Table View */
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -730,7 +747,7 @@ const CampaignsPage = () => {
                                 {userDetails[applicant.userId]?.phone || 'Fetching...'}
                               </div>
                               <div className="text-xs text-gray-500 truncate max-w-[160px] flex items-center">
-                                <Instagram className="h-3 w-3 mr-1 text-gray-400" /> {/* Instagram Icon */}
+                                <Instagram className="h-3 w-3 mr-1 text-gray-400" />
                                 {applicant.instagramUsername || applicant.instagramProfile ? (
                                   <a 
                                     href={applicant.instagramProfile || `https://instagram.com/${applicant.instagramUsername}`} 
@@ -812,7 +829,6 @@ const CampaignsPage = () => {
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-4 px-4 sm:px-6 bg-white rounded-lg border border-gray-200">
           <div className="text-sm text-gray-700">

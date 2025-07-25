@@ -67,6 +67,7 @@ type Creator = {
   deliveryDuration: string;
   timestamp: Date;
   status: 'pending' | 'approved' | 'rejected' | string;
+  subscriptionStatus: 'active' | 'inactive' | string;
 };
 
 // --- HELPER FUNCTION FOR PARSING NUMBERS ---
@@ -102,18 +103,22 @@ function CreatorListPage() {
   const [tempSelectedCityState, setTempSelectedCityState] = useState(appliedCityState);
 
   const [sortBy, setSortBy] = useState<string>("followers_desc");
-  const [showFilters, setShowFilters] = useState(false); // Default to collapsed
+  const [showFilters, setShowFilters] = useState(false);
 
   const [categories, setCategories] = useState<string[]>(["All"]);
   const [languages, setLanguages] = useState<string[]>(["All"]);
   const [citiesStates, setCitiesStates] = useState<string[]>(["All"]);
 
   useEffect(() => {
-    const fetchApprovedCreators = async () => {
+    const fetchActiveCreators = async () => {
       try {
         setLoadingCreators(true);
         const creatorsCollectionRef = collection(db, "creatorApplications");
-        const q = query(creatorsCollectionRef, where("status", "==", "approved"));
+        
+        // --- MODIFIED --- 
+        // Query now only filters for creators with an 'active' subscription.
+        const q = query(creatorsCollectionRef, where("subscriptionStatus", "==", "active"));
+
         const querySnapshot = await getDocs(q);
 
         const creatorsData = querySnapshot.docs.map(doc => {
@@ -139,6 +144,7 @@ function CreatorListPage() {
             deliveryDuration: data.deliveryDuration || 'Varies',
             timestamp: data.timestamp?.toDate() || new Date(),
             status: data.status || 'pending',
+            subscriptionStatus: data.subscriptionStatus || 'inactive',
           };
         }) as Creator[];
         setCreators(creatorsData);
@@ -160,15 +166,17 @@ function CreatorListPage() {
         setCitiesStates(["All", ...Array.from(uniqueCitiesStates).sort()]);
 
       } catch (err) {
-        setError("Failed to fetch approved creators. Please try again later.");
-        console.error("Error fetching approved creators:", err);
+        setError("Failed to fetch active creators. Please try again later.");
+        console.error("Error fetching active creators:", err);
       } finally {
         setLoadingCreators(false);
       }
     };
 
-    fetchApprovedCreators();
+    fetchActiveCreators();
   }, []);
+
+  // --- No other changes are needed below this line ---
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -269,9 +277,6 @@ function CreatorListPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-purple-400 z-10" />
           <Input
             placeholder="Search by name/ username..."
-            // *** FIX APPLIED HERE for search input:
-            // - Added focus:outline-none to remove the default browser outline.
-            // - Ensure focus:ring-2 provides your custom indicator.
             className="w-full border border-purple-300 text-lg py-4 pl-10 pr-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500"
             aria-label="Search creators"
             value={searchTerm}
@@ -279,15 +284,12 @@ function CreatorListPage() {
           />
         </div>
 
-        {/* Show/Hide Filters Button - Small and right-aligned on mobile */}
+        {/* Show/Hide Filters Button */}
         <div className="flex justify-end max-w-2xl mx-auto mb-8">
           <Button
             onClick={() => setShowFilters(!showFilters)}
             variant="outline"
             size="sm"
-            // *** FIX APPLIED HERE for button:
-            // - Added focus:outline-none to remove the default browser outline.
-            // - Keep your hover/border styles.
             className="rounded-full px-4 py-2 font-semibold text-sm border-2 border-purple-200 hover:border-purple-500 transition-all duration-300 shadow-md focus:outline-none"
           >
             {showFilters ? (
@@ -298,7 +300,7 @@ function CreatorListPage() {
           </Button>
         </div>
 
-        {/* Collapsible Filter & Sort Panel - Aligned like search bar */}
+        {/* Collapsible Filter & Sort Panel */}
         <AnimatePresence>
           {showFilters && (
             <motion.div
@@ -315,9 +317,6 @@ function CreatorListPage() {
                   <Select value={tempSelectedCategory} onValueChange={setTempSelectedCategory}>
                     <SelectTrigger
                       id="category-select"
-                      // *** FIX APPLIED HERE for SelectTrigger:
-                      // - Added focus:outline-none to remove the default browser outline.
-                      // - Your custom focus:ring is already in place.
                       className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
                     >
                       <SelectValue placeholder="Select Category" />
@@ -332,8 +331,6 @@ function CreatorListPage() {
                   <Select value={tempSelectedLanguage} onValueChange={setTempSelectedLanguage}>
                     <SelectTrigger
                       id="language-select"
-                      // *** FIX APPLIED HERE for SelectTrigger:
-                      // - Added focus:outline-none to remove the default browser outline.
                       className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
                     >
                       <SelectValue placeholder="Select Language" />
@@ -348,8 +345,6 @@ function CreatorListPage() {
                   <Select value={tempSelectedCityState} onValueChange={setTempSelectedCityState}>
                     <SelectTrigger
                       id="city-select"
-                      // *** FIX APPLIED HERE for SelectTrigger:
-                      // - Added focus:outline-none to remove the default browser outline.
                       className="w-full rounded-full border-2 border-gray-200 focus:ring-purple-500 focus:border-purple-500 transition-all focus:outline-none"
                     >
                       <SelectValue placeholder="Select City/State" />
@@ -368,8 +363,6 @@ function CreatorListPage() {
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
-                        // *** FIX APPLIED HERE for DropdownMenuTrigger Button:
-                        // - Added focus:outline-none to remove the default browser outline.
                         className="w-full rounded-full px-5 py-2 flex items-center justify-center gap-2 transition-all duration-200 border-2 border-gray-200 hover:border-purple-400 focus:outline-none"
                       >
                         {sortBy.includes('desc') ? <ArrowDownWideNarrow className="h-4 w-4" /> : <ArrowUpWideNarrow className="h-4 w-4" />}
@@ -399,11 +392,10 @@ function CreatorListPage() {
           )}
         </AnimatePresence>
 
-        {/* Creator count moved below the filter panel when it's open, or below the show/hide button when collapsed */}
+        {/* Creator count */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
           <p className="text-md font-medium text-gray-600">Showing <span className="font-bold text-purple-600">{sortedAndFilteredCreators.length}</span> of <span className="font-bold text-gray-800">{creators.length}</span> creators</p>
         </div>
-        {/* Added a horizontal line for separation */}
         <div className="border-b border-gray-200 mb-8"></div>
 
         {loadingCreators ? (
@@ -421,7 +413,6 @@ function CreatorListPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
               >
-                {/* --- FULL CARD DETAILS RESTORED HERE --- */}
                 <Card className="group relative shadow-md hover:shadow-xl hover:ring-2 hover:ring-purple-400 transition-all duration-300 border border-purple-100 rounded-2xl overflow-hidden cursor-pointer h-full flex flex-col">
                   <Link href={`/creator/${creator.id}`} passHref>
                     <div className="p-6 flex flex-col h-full">
@@ -473,7 +464,6 @@ function CreatorListPage() {
 
 
 // --- Wrapper component with Suspense ---
-// This is required for useSearchParams to work correctly in Next.js App Router.
 export default function CreatorListPageWrapper() {
   return (
     <Suspense fallback={

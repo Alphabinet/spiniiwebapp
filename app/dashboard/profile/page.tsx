@@ -12,12 +12,6 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { User as FirebaseUser } from "firebase/auth";
 import Image from "next/image";
 
-// --- REMOVED Razorpay Type Declarations ---
-// declare global { ... }
-// interface RazorpayOptions { ... }
-// interface RazorpayInstance { ... }
-// interface RazorpayPaymentResponse { ... }
-// interface RazorpayErrorResponse { ... }
 
 // --- TypeScript Interfaces ---
 interface ApplicationData {
@@ -302,7 +296,16 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
         }
     };
 
-    const contentCategories = ["Fashion", "Tech", "Comedy", "Fitness", "Beauty", "Travel", "Food", "Gaming", "Lifestyle", "Education", "DIY", "Art", "Music", "Dance", "Vlogging", "Health & Wellness"];
+    // ===== UPDATED CATEGORIES ARRAY =====
+    const contentCategories = [
+        'Fashion', 'Beauty', 'Lifestyle', 'Fitness', 'Travel', 'Food', 'Technology',
+        'Gaming', 'Comedy', 'Motivation', 'Music', 'Dance', 'Photography', 'Art',
+        'DIY (Do It Yourself)', 'Education', 'Finance', 'Health & Wellness', 'Parenting',
+        'Pets', 'Cars & Automobiles', "Men's Grooming", 'Home Decor', 'Spirituality',
+        'Acting', 'Reviews & Unboxing', 'Astrology', 'Modeling', 'Vlogger',
+        'Books & Reading', 'Makeup', 'Nails & Nail Art', 'Skincare',
+        'Saree & Ethnic Wear', 'Luxury Lifestyle', 'Entertainment'
+    ];
     const genders = ["Male", "Female", "Other", "Prefer not to say"];
 
     return (
