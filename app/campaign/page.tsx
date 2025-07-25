@@ -53,6 +53,7 @@ interface UserProfile {
     accountType: 'creator' | 'user';
     instagramUsername?: string;
     instagramProfile?: string;
+    subscriptionStatus?: 'active' | 'inactive';
 }
 
 // --- Skeleton Loader ---
@@ -98,6 +99,38 @@ const SignInPrompt = () => {
     );
 };
 
+// --- Subscription Prompt Modal ---
+const SubscriptionPromptModal = ({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void; }) => {
+    const router = useRouter();
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <div className="flex justify-center">
+                        <Sparkles className="w-16 h-16 text-violet-400" />
+                    </div>
+                    <DialogTitle className="text-center text-2xl font-bold mt-4">Subscription Required</DialogTitle>
+                    <DialogDescription className="text-center mt-2">
+                        An active subscription is needed to apply for campaigns. Please upgrade your plan to unlock this feature.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="sm:justify-center pt-4">
+                     <Button
+                        onClick={() => {
+                            router.push('/subscribe'); // Assumes '/subscribe' is your subscription page
+                            onOpenChange(false);
+                        }}
+                        className="w-full text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                    >
+                        <LogIn className="w-4 h-4 mr-2" />
+                        Subscribe Now
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 
 export default function CampaignPage() {
     const router = useRouter();
@@ -120,6 +153,7 @@ export default function CampaignPage() {
     const [instagramLink, setInstagramLink] = useState('');
     const [isSavingInstagram, setIsSavingInstagram] = useState(false);
     const [applyingToCampaignId, setApplyingToCampaignId] = useState<string | null>(null);
+    const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
     // --- Data Fetching and Mapping ---
     const mapFirestoreDocToCampaignUI = (doc: QueryDocumentSnapshot<DocumentData>): CampaignUI => {
@@ -164,19 +198,16 @@ export default function CampaignPage() {
 
     // --- EFFECT 2: Fetch Data for Logged-In User ---
     useEffect(() => {
-        // If there is no user, clear data and do nothing.
         if (!user) {
             setAllCampaigns([]);
             setAppliedCampaignIds(new Set());
             setUserProfile(null);
-            setIsLoading(false); // Stop any loading state
+            setIsLoading(false); 
             return;
         }
 
-        // A user is logged in, so start loading their data.
         setIsLoading(true);
 
-        // Fetch non-realtime data first
         const fetchUserData = async () => {
             try {
                 const userDocRef = doc(db, 'users', user.uid);
@@ -186,10 +217,11 @@ export default function CampaignPage() {
                     setUserProfile({
                         name: data.name || "User", email: data.email || "N/A", profileImage: data.profileImage || null,
                         accountType: data.accountType === 'creator' ? 'creator' : 'user',
-                        instagramUsername: data.instagramUsername || '', instagramProfile: data.instagramProfile || ''
+                        instagramUsername: data.instagramUsername || '', instagramProfile: data.instagramProfile || '',
+                        subscriptionStatus: data.subscriptionStatus || 'inactive'
                     });
                 } else {
-                    setUserProfile({ name: "User", email: user.email || "N/A", profileImage: null, accountType: 'user' });
+                    setUserProfile({ name: "User", email: user.email || "N/A", profileImage: null, accountType: 'user', subscriptionStatus: 'inactive' });
                 }
 
                 const appliedQ = query(collection(db, `users/${user.uid}/appliedCampaigns`));
@@ -204,25 +236,23 @@ export default function CampaignPage() {
 
         fetchUserData();
 
-        // Now, set up the real-time listener for campaigns.
         const q = query(collection(db, "campaigns"), where("status", "==", "approved"), orderBy("createdAt", "desc"));
         const unsubscribeCampaigns = onSnapshot(q, (snapshot) => {
             const campaigns = snapshot.docs.map(doc => mapFirestoreDocToCampaignUI(doc));
             setAllCampaigns(campaigns);
             setCampaignLoadError(null);
-            setIsLoading(false); // Data is loaded, stop skeleton loader
+            setIsLoading(false);
         }, (error) => {
             console.error("Campaign listener error:", error);
             setCampaignLoadError("Failed to load approved campaigns.");
             setIsLoading(false);
         });
 
-        // Cleanup the listener when the user logs out or component unmounts
         return () => {
             unsubscribeCampaigns();
         };
 
-    }, [user]); // This entire effect depends on the user object
+    }, [user]);
 
     // --- Component Functions ---
     const filteredAndSortedCampaigns = useMemo(() => {
@@ -276,6 +306,13 @@ export default function CampaignPage() {
         if (!user || !userProfile) { router.push('/signin'); return; }
         if (userProfile.accountType !== 'creator') { toast.error("Only creators can apply for campaigns."); return; }
 
+        // New Subscription Check
+        if (userProfile.subscriptionStatus !== 'active') {
+            setIsSubscriptionModalOpen(true);
+            return; // Stop the application process
+        }
+        
+        // Proceed if subscription is active
         if (userProfile.instagramUsername && userProfile.instagramProfile) {
             handleDirectApply(campaignId);
         } else {
@@ -497,6 +534,12 @@ export default function CampaignPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Subscription Prompt Modal */}
+            <SubscriptionPromptModal 
+                open={isSubscriptionModalOpen} 
+                onOpenChange={setIsSubscriptionModalOpen}
+            />
         </div>
     );
 }
@@ -576,7 +619,7 @@ const CampaignCard: React.FC<CampaignCardProps> = ({ campaign, user, userProfile
                         <LogIn className="w-4 h-4 mr-2" />Login to Apply
                     </Button>
                 ) : userProfile?.accountType !== 'creator' ? (
-                    <Button className="w-full" disabled><XCircle className="w-4 h-4 mr-2" />Creators Only</Button>
+                    <Button className="w-full" disabled><XCircle className="w-4 h-4 mr-2" />Membership Creators Only</Button>
                 ) : isApplied ? (
                     <Button variant="destructive" className="w-full" onClick={onUnapply} disabled={isProcessing}>
                         {isProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XIcon className="w-4 h-4 mr-2" />}Withdraw

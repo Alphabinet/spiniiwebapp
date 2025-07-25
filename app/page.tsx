@@ -595,7 +595,7 @@ export default function HomePage() {
         <div
           className="overflow-hidden rounded-lg cursor-grab active:cursor-grabbing"
           onTouchStart={onTouchStartProp} // Use the passed prop here
-          onTouchEnd={onTouchEndProp}     // Use the passed prop here
+          onTouchEnd={onTouchEndProp}    // Use the passed prop here
         >
           <motion.div
             className="flex"
@@ -687,7 +687,8 @@ export default function HomePage() {
             ))}
           </motion.div>
         </div>
-        {totalSlides > 1 && (
+        {/* Removed slider dots for creator carousels */}
+        {/* {totalSlides > 1 && (
           <div className="flex justify-center mt-4 space-x-2">
             {Array.from({ length: totalSlides }).map((_, index) => (
               <button
@@ -699,7 +700,7 @@ export default function HomePage() {
               />
             ))}
           </div>
-        )}
+        )} */}
       </div>
     );
   };
@@ -847,7 +848,8 @@ export default function HomePage() {
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-20">
+                  {/* Removed slider dots for banner */}
+                  {/* <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2 z-20">
                     {banners.map((_, index) => (
                       <button
                         key={index}
@@ -861,7 +863,7 @@ export default function HomePage() {
                           }`}
                       />
                     ))}
-                  </div>
+                  </div> */}
                 </>
               )}
             </div>
@@ -900,7 +902,7 @@ export default function HomePage() {
                   size="sm"
                   onClick={() => setSelectedCategory(category)}
                   className={`rounded-full px-4 py-1 transition-all duration-200 whitespace-nowrap
-                  ${selectedCategory === category
+                    ${selectedCategory === category
                       ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600"
                       : "border border-gray-300 text-gray-700 hover:bg-gray-100"
                     }`}

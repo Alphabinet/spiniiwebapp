@@ -129,8 +129,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Email Us</h3>
-                    <a href="mailto:business@snaapii.com" className="text-gray-600 hover:text-purple-600">
-                      business@snaapii.com
+                    <a href="mailto:contact@snaapii.com" className="text-gray-600 hover:text-purple-600">
+                      contact@snaapii.com
                     </a>
                   </div>
                 </div>
@@ -142,8 +142,8 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Message on WhatsApp</h3>
-                    <a href="https://wa.me/917084989378" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-green-600">
-                      +91 70849 89378
+                    <a href="https://wa.me/917317016213" target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-green-600">
+                      +91 7317016213
                     </a>
                   </div>
                 </div>

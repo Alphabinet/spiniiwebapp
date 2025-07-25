@@ -1,15 +1,10 @@
-// Removed "use client" as framer-motion is no longer used
-// import { motion } from "framer-motion"; // Removed framer-motion import
 
-// Removed animation variants as framer-motion is not used
-// const containerVariants = { ... };
-// const itemVariants = { ... };
 
 export default function PrivacyPolicyPage() {
   const effectiveDate = "July 14, 2025"; // Updated to current date
 
   return (
-    // Removed bg-gradient and simplified background to a solid white for consistency,
+   
     // and ensured full responsiveness with standard Tailwind classes.
     <div className="min-h-screen bg-white text-gray-800 py-12 px-4 sm:px-6 lg:px-8">
       <div className="container mx-auto px-0 max-w-4xl"> {/* Removed px-4/sm:px-6/lg:px-8 from container to avoid double padding */}
@@ -158,7 +153,7 @@ export default function PrivacyPolicyPage() {
             8. Owner Information
           </h2>
           <p className="mb-6 text-base md:text-lg">
-            SNAAPII is owned and operated by **Ritesh Kumar**.
+            SNAAPII is owned and operated by Ritesh Kumar.
           </p>
 
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6 mt-8 pb-4 border-b border-purple-200">
@@ -174,7 +169,9 @@ export default function PrivacyPolicyPage() {
           <p className="mb-6 text-base md:text-lg">
             If you have any questions about this Privacy Policy, please contact us:
             <br />
-            By email: <a href="mailto:business@snaapii.com" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">business@snaapii.com</a>
+            By email: <a href="mailto:contact@snaapii.com" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">contact@snaapii.com</a>
+            <br />
+            By phone: <a href="tel:+917317016213" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">+91-7317016213</a>
             <br />
             Website: <a href="https://www.snaapii.com" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">www.snaapii.com</a>
           </p>

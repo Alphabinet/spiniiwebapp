@@ -42,7 +42,7 @@ export default function ReturnRefundPolicy() {
             Before You Pay
           </h2>
           <p className="text-base sm:text-lg leading-relaxed">
-            We encourage all users to thoroughly review the details of their chosen service, campaign, or subscription plan before completing the payment process. If you have any questions or require clarification regarding our services, please contact our support team at <span className="text-blue-600">business@snaapii.com</span> before making a payment.
+            We encourage all users to thoroughly review the details of their chosen service, campaign, or subscription plan before completing the payment process. If you have any questions or require clarification regarding our services, please contact our support team at <a href="mailto:contact@snaapii.com" className="text-blue-600 hover:underline">contact@snaapii.com</a> before making a payment.
           </p>
 
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 mt-8 mb-4">
@@ -52,8 +52,8 @@ export default function ReturnRefundPolicy() {
             If you have any questions about this Return & Refund Policy, please contact us:
           </p>
           <ul className="list-disc list-inside ml-4 space-y-2 text-base sm:text-lg leading-relaxed">
-            <li>By email: <a href="mailto:business@snaapii.com" className="text-blue-600 hover:underline">business@snaapii.com</a></li>
-            <li>By phone: <span className="text-green-600">+91 70849 89378</span></li>
+            <li>By email: <a href="mailto:contact@snaapii.com" className="text-blue-600 hover:underline">contact@snaapii.com</a></li>
+            <li>By phone: <span className="text-green-600">+91 7317016213</span></li>
           </ul>
         </div>
       </div>

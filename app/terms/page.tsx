@@ -1,7 +1,7 @@
 "use client";
 
 export default function TermsAndConditionsPage() {
-  const effectiveDate = "July 8, 2025"; // You can update this date as needed
+  const effectiveDate = "July 25, 2025"; // Updated to current date
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-16 md:py-24">
@@ -151,7 +151,9 @@ export default function TermsAndConditionsPage() {
           <p className="mb-6 text-base md:text-lg">
             If you have any questions about these Terms, please contact us:
             <br />
-            By email: <a href="mailto:business@snaapii.com" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">business@snaapii.com</a>
+            By email: <a href="mailto:contact@snaapii.com" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">contact@snaapii.com</a>
+            <br />
+            By phone: <a href="tel:+917317016213" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">+91-7317016213</a>
             <br />
             Website: <a href="https://www.snaapii.com" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-800 hover:underline font-semibold">www.snaapii.com</a>
           </p>
