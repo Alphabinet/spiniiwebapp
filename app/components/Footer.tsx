@@ -67,6 +67,12 @@ export default function Footer() {
                   Return & Refund Policy
                 </Link>
               </li>
+              {/* Add the new Data Deletion Policy link here */}
+              <li>
+                <Link href="/data-deletion-policy" className="text-gray-400 hover:text-white transition-colors duration-300">
+                  Data Deletion Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -125,6 +131,10 @@ export default function Footer() {
             </Link>
             <Link href="/return-refund" className="text-gray-400 hover:text-white transition-colors duration-300">
               Return & Refund Policy
+            </Link>
+            {/* Also add it to the bottom bar for consistency if desired */}
+            <Link href="/datadeletion" className="text-gray-400 hover:text-white transition-colors duration-300">
+              Data Deletion Policy
             </Link>
           </div>
           <p className="text-gray-400 text-sm mb-4 md:mb-0">
