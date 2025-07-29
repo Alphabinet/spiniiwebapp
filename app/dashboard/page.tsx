@@ -543,7 +543,7 @@ export function ApplicationForm({ user, userData, existingApplication, isSubscri
                 ...formData,
                 profilePictureUrl: imageUrl,
                 userId: user.uid,
-                status: existingApplication?.status || "pending",
+                status: existingApplication?.status === 'rejected' ? 'pending' : (existingApplication?.status || 'pending'), // Reset to pending if rejected
                 updatedAt: serverTimestamp(),
             };
 
@@ -1035,9 +1035,24 @@ function CreatorDashboard() {
             unsubscribeUser();
             unsubscribeCreator();
         };
-    }, [user, router]); // <-- Correct, minimal dependencies
+    }, [user, router]);
 
-    // --- EFFECT 2: Sets the initial view after data is loaded ---
+    // --- EFFECT 2: Handles account type update when application is approved ---
+    // This effect runs whenever the creator application status changes to 'approved'.
+    useEffect(() => {
+        if (user && creatorData?.status === 'approved' && userData?.accountType !== 'creator') {
+            const userDocRef = doc(db, "users", user.uid);
+            console.log("Application approved. Updating account type to 'creator'.");
+            updateDoc(userDocRef, {
+                accountType: 'creator',
+                updatedAt: serverTimestamp()
+            }).catch(err => {
+                console.error("Failed to update user account type:", err);
+            });
+        }
+    }, [user, userData, creatorData]); // Dependencies ensure this logic runs with the latest data.
+
+    // --- EFFECT 3: Sets the initial view after data is loaded ---
     useEffect(() => {
         // This effect should only run once after data is loaded.
         if (loading || initialViewIsSet.current || !userData) {
@@ -1058,7 +1073,7 @@ function CreatorDashboard() {
         // Mark the initial view as set to prevent this from running again
         initialViewIsSet.current = true;
 
-    }, [loading, userData, creatorData]); // <-- Runs only when data state changes
+    }, [loading, userData, creatorData]);
 
     if (loading) {
         return (
