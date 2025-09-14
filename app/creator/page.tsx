@@ -143,8 +143,8 @@ function CreatorListPage() {
             reelsStoryPrice: data.reelsStoryPrice || '0',
             deliveryDuration: data.deliveryDuration || 'Varies',
             timestamp: data.timestamp?.toDate() || new Date(),
-            status: data.status || 'pending',
-            subscriptionStatus: data.subscriptionStatus || 'inactive',
+            status: data.status || 'approved',
+            subscriptionStatus: data.subscriptionStatus || 'active',
           };
         }) as Creator[];
         setCreators(creatorsData);

@@ -271,7 +271,7 @@ function ApplicationForm({ user, existingApplication, isSubscribed }: Applicatio
                 ...formData,
                 profilePictureUrl: imageUrl,
                 userId: user.uid, // Ensure userId is set
-                status: "pending", // Application status is always pending upon submission
+                status: "approved", // Application status is always pending upon submission
                 timestamp: existingApplication?.timestamp || serverTimestamp(), // Keep original timestamp if updating
                 updatedAt: serverTimestamp(), // Update timestamp on every submission
                 // Removed subscription-related fields from dataToSend as they are no longer handled here:

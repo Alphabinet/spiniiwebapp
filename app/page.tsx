@@ -1255,7 +1255,7 @@ export default function HomePage() {
         </div>
       </section>
       {/* Modals */}
-      <ContactModal isOpen={showContact} onClose={() => setShowContact(false)} id="contact-modal" />
+      <ContactModal isOpen={showContact} onClose={() => setShowContact(false)} />
       {/* Footer */}
       <Footer />
     </div>
