@@ -736,11 +736,13 @@ export function ApplicationForm({
     setUploading(true);
 
     try {
+      // Prefer newly uploaded File `image`. If not present, fall back to
+      // `imagePreview` (this may contain the Instagram autofill URL).
       let imageUrl = existingApplication?.profilePictureUrl || "";
-      if (image) {
-        const imageRef = ref(storage, `creator_profiles/${uuidv4()}`);
-        await uploadBytes(imageRef, image);
-        imageUrl = await getDownloadURL(imageRef);
+
+      if (imagePreview) {
+        // Use the third-party platform’s image if available
+        imageUrl = String(imagePreview);
       }
 
       // Send formData (which now includes IG metrics) to Firestore
@@ -1355,66 +1357,69 @@ export function ApplicationForm({
                         Top Posts
                       </h5>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
-  {connectedProfile.topPosts.slice(0, 6).map((p: any) => (
-    <a
-      key={p.id || p.media_id || Math.random()}
-      href={p.permalink || p.permalink_url || "#"}
-      target="_blank"
-      rel="noreferrer"
-      className="relative aspect-[4/5] bg-neutral-800 rounded-md overflow-hidden group"
-    >
-      {p.thumbnail ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={p.thumbnail}
-          alt={p.id}
-          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-sm text-neutral-400">
-          No Image
-        </div>
-      )}
+                        {connectedProfile.topPosts.slice(0, 6).map((p: any) => (
+                          <a
+                            key={p.id || p.media_id || Math.random()}
+                            href={p.permalink || p.permalink_url || "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="relative aspect-[4/5] bg-neutral-800 rounded-md overflow-hidden group"
+                          >
+                            {p.thumbnail ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={p.thumbnail}
+                                alt={p.id}
+                                className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-sm text-neutral-400">
+                                No Image
+                              </div>
+                            )}
 
-      {/* Overlay with Likes & Comments */}
-      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <div className="flex items-center gap-4 text-white text-sm font-medium">
-          <div className="flex items-center gap-1">
-            {/* Like Icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-            >
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 
+                            {/* Overlay with Likes & Comments */}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <div className="flex items-center gap-4 text-white text-sm font-medium">
+                                <div className="flex items-center gap-1">
+                                  {/* Like Icon */}
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="currentColor"
+                                    viewBox="0 0 24 24"
+                                    className="w-4 h-4"
+                                  >
+                                    <path
+                                      d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 
                 5.42 4.42 3 7.5 3c1.74 0 3.41.81 
                 4.5 2.09C13.09 3.81 14.76 3 16.5 
                 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 
-                6.86-8.55 11.54L12 21.35z" />
-            </svg>
-            {p.likes ?? p.like_count ?? "—"}
-          </div>
-          <div className="flex items-center gap-1">
-            {/* Comment Icon */}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-              className="w-4 h-4"
-            >
-              <path d="M20 2H4C2.9 2 2 2.9 2 
+                6.86-8.55 11.54L12 21.35z"
+                                    />
+                                  </svg>
+                                  {p.likes ?? p.like_count ?? "—"}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {/* Comment Icon */}
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="currentColor"
+                                    viewBox="0 0 24 24"
+                                    className="w-4 h-4"
+                                  >
+                                    <path
+                                      d="M20 2H4C2.9 2 2 2.9 2 
                 4v20l4-4h14c1.1 0 2-.9 
-                2-2V4c0-1.1-.9-2-2-2z" />
-            </svg>
-            {p.comments ?? p.comments_count ?? "—"}
-          </div>
-        </div>
-      </div>
-    </a>
-  ))}
-</div>
-
+                2-2V4c0-1.1-.9-2-2-2z"
+                                    />
+                                  </svg>
+                                  {p.comments ?? p.comments_count ?? "—"}
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+                        ))}
+                      </div>
                     </div>
                   )}
               </div>
@@ -2134,28 +2139,42 @@ function CreatorDashboard() {
 
                   <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <h4 className="text-xs text-gray-500 mb-1">Posting Frequency</h4>
+                      <h4 className="text-xs text-gray-500 mb-1">
+                        Posting Frequency
+                      </h4>
                       <div className="flex items-baseline gap-4">
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{(creatorData as any).postsPerWeek ?? "-"}</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {(creatorData as any).postsPerWeek ?? "-"}
+                          </div>
                           <div className="text-xs text-gray-500">per week</div>
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{(creatorData as any).postsPerMonth ?? "-"}</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {(creatorData as any).postsPerMonth ?? "-"}
+                          </div>
                           <div className="text-xs text-gray-500">per month</div>
                         </div>
                       </div>
                     </div>
 
                     <div className="bg-white rounded-lg p-3 border border-gray-100">
-                      <h4 className="text-xs text-gray-500 mb-1">Engagement & Reach</h4>
+                      <h4 className="text-xs text-gray-500 mb-1">
+                        Engagement & Reach
+                      </h4>
                       <div className="flex items-baseline gap-4">
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{(creatorData as any).engagementRate ?? "-"}%</div>
-                          <div className="text-xs text-gray-500">engagement rate</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {(creatorData as any).engagementRate ?? "-"}%
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            engagement rate
+                          </div>
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{(creatorData as any).accountReach ?? "-"}</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {(creatorData as any).accountReach ?? "-"}
+                          </div>
                           <div className="text-xs text-gray-500">reach</div>
                         </div>
                       </div>
@@ -2163,18 +2182,26 @@ function CreatorDashboard() {
                   </div>
 
                   <div className="mt-4 bg-white rounded-lg p-3 border border-gray-100">
-                    <h4 className="text-xs text-gray-500 mb-2">Instagram Profile</h4>
+                    <h4 className="text-xs text-gray-500 mb-2">
+                      Instagram Profile
+                    </h4>
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <a
-                          href={(creatorData as any).instagramProfileLink || (creatorData as any).profileUrl || "#"}
+                          href={
+                            (creatorData as any).instagramProfileLink ||
+                            (creatorData as any).profileUrl ||
+                            "#"
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-purple-600 font-medium hover:underline text-sm"
                         >
                           @{creatorData.instagramUsername}
                         </a>
-                        <div className="text-xs text-gray-500">State: {(creatorData as any).instagramState ?? "-"}</div>
+                        <div className="text-xs text-gray-500">
+                          State: {(creatorData as any).instagramState ?? "-"}
+                        </div>
                       </div>
                       <div>
                         {creatorData.profilePictureUrl ? (

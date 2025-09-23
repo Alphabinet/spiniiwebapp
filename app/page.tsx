@@ -32,6 +32,7 @@ import {
   TrendingUp,
   Clock,
   LogIn, // Import the LogIn icon
+  BadgeInfo,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,7 +180,9 @@ export default function HomePage() {
   const filteredCreators = useMemo(() => {
     let result = creators;
     if (selectedCategory !== "All") {
-      result = result.filter((creator) => creator.category === selectedCategory);
+      result = result.filter(
+        (creator) => creator.category === selectedCategory
+      );
     }
     if (searchQuery.trim() !== "") {
       const query = searchQuery.toLowerCase();
@@ -259,9 +262,17 @@ export default function HomePage() {
           if (data.contentCategory) uniqueCategories.add(data.contentCategory);
 
           const services: string[] = [];
-          if (data.reelPrice && data.reelPrice !== "N/A" && data.reelPrice !== "0")
+          if (
+            data.reelPrice &&
+            data.reelPrice !== "N/A" &&
+            data.reelPrice !== "0"
+          )
             services.push("Reel");
-          if (data.storyPrice && data.storyPrice !== "N/A" && data.storyPrice !== "0")
+          if (
+            data.storyPrice &&
+            data.storyPrice !== "N/A" &&
+            data.storyPrice !== "0"
+          )
             services.push("Story");
           if (
             data.reelsStoryPrice &&
@@ -279,8 +290,8 @@ export default function HomePage() {
                 firstValidService === "Reel"
                   ? data.reelPrice
                   : firstValidService === "Story"
-                    ? data.storyPrice
-                    : data.reelsStoryPrice,
+                  ? data.storyPrice
+                  : data.reelsStoryPrice,
             };
           }
 
@@ -362,10 +373,13 @@ export default function HomePage() {
   // --- UI EFFECTS & INTERVALS ---
   useEffect(() => {
     rotatingIntervalRef.current = setInterval(() => {
-      setRotatingCategoryIndex((prev) => (prev + 1) % rotatingCategories.length);
+      setRotatingCategoryIndex(
+        (prev) => (prev + 1) % rotatingCategories.length
+      );
     }, 5000);
     return () => {
-      if (rotatingIntervalRef.current) clearInterval(rotatingIntervalRef.current);
+      if (rotatingIntervalRef.current)
+        clearInterval(rotatingIntervalRef.current);
       if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
     };
   }, [rotatingCategories.length]);
@@ -377,7 +391,9 @@ export default function HomePage() {
   const handleSearchBlur = () => {
     restartTimeoutRef.current = setTimeout(() => {
       rotatingIntervalRef.current = setInterval(() => {
-        setRotatingCategoryIndex((prev) => (prev + 1) % rotatingCategories.length);
+        setRotatingCategoryIndex(
+          (prev) => (prev + 1) % rotatingCategories.length
+        );
       }, 5000);
     }, 20000);
   };
@@ -444,7 +460,9 @@ export default function HomePage() {
     totalSlides: number
   ) => ({
     nextSlide: () =>
-      setCurrentSlide((prev) => (totalSlides > 0 ? (prev + 1) % totalSlides : 0)),
+      setCurrentSlide((prev) =>
+        totalSlides > 0 ? (prev + 1) % totalSlides : 0
+      ),
     prevSlide: () =>
       setCurrentSlide((prev) =>
         totalSlides > 0 ? (prev - 1 + totalSlides) % totalSlides : 0
@@ -484,14 +502,14 @@ export default function HomePage() {
 
   const createTouchEndHandler =
     (slideHandlers: { nextSlide: () => void; prevSlide: () => void }) =>
-      (e: React.TouchEvent<HTMLDivElement>) => {
-        const touchEndX = e.changedTouches[0].clientX;
-        const swipeDistance = touchStartX.current - touchEndX;
-        if (Math.abs(swipeDistance) > 50) {
-          if (swipeDistance > 0) slideHandlers.nextSlide();
-          else slideHandlers.prevSlide();
-        }
-      };
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const swipeDistance = touchStartX.current - touchEndX;
+      if (Math.abs(swipeDistance) > 50) {
+        if (swipeDistance > 0) slideHandlers.nextSlide();
+        else slideHandlers.prevSlide();
+      }
+    };
 
   // --- EVENT HANDLERS ---
   const handleGetStarted = () => router.push(user ? "/dashboard" : "/signin");
@@ -514,7 +532,9 @@ export default function HomePage() {
             .getElementById("homepage-search-section")
             ?.scrollIntoView({ behavior: "smooth", block: "center" });
         } else {
-          console.warn("Homepage search input ref not available, cannot focus.");
+          console.warn(
+            "Homepage search input ref not available, cannot focus."
+          );
           document
             .getElementById("homepage-search-section")
             ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -595,7 +615,7 @@ export default function HomePage() {
         <div
           className="overflow-hidden rounded-lg cursor-grab active:cursor-grabbing"
           onTouchStart={onTouchStartProp} // Use the passed prop here
-          onTouchEnd={onTouchEndProp}    // Use the passed prop here
+          onTouchEnd={onTouchEndProp} // Use the passed prop here
         >
           <motion.div
             className="flex"
@@ -624,7 +644,10 @@ export default function HomePage() {
                         }}
                       />
                       <AvatarFallback className="text-2xl font-bold">
-                        {creator.name.split(" ").map((n) => n[0]).join("")}
+                        {creator.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col items-center mb-4">
@@ -666,7 +689,7 @@ export default function HomePage() {
                             size="sm"
                             className="rounded-xl bg-green-600 hover:bg-green-500 text-white"
                           >
-                            <ShoppingCart className="h-4 w-4 mr-1" /> Buy
+                            <BadgeInfo className="h-4 w-4 mr-1" /> View
                           </Button>
                         </Link>
                       ) : (
@@ -814,13 +837,14 @@ export default function HomePage() {
               </div>
             </div>
           ) : banners.length > 0 ? (
-            <div className="relative rounded-xl sm:rounded-3xl overflow-hidden shadow-lg pt-[38%]">
+            <div className="relative rounded-xl sm:rounded-3xl overflow-hidden shadow-lg pt-[48%] sm:pt-[38%]">
               <div className="absolute inset-0 w-full h-full">
                 {banners.map((banner, index) => (
                   <div
                     key={banner.id}
-                    className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${index === currentBanner ? "opacity-100" : "opacity-0"
-                      }`}
+                    className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                      index === currentBanner ? "opacity-100" : "opacity-0"
+                    }`}
                   >
                     <Image
                       src={banner.image}
@@ -898,13 +922,16 @@ export default function HomePage() {
               {availableCategories.map((category) => (
                 <Button
                   key={category}
-                  variant={selectedCategory === category ? "default" : "outline"}
+                  variant={
+                    selectedCategory === category ? "default" : "outline"
+                  }
                   size="sm"
                   onClick={() => setSelectedCategory(category)}
                   className={`rounded-full px-4 py-1 transition-all duration-200 whitespace-nowrap
-                    ${selectedCategory === category
-                      ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600"
-                      : "border border-gray-300 text-gray-700 hover:bg-gray-100"
+                    ${
+                      selectedCategory === category
+                        ? "bg-purple-600 text-white hover:bg-purple-600 active:bg-purple-600 focus:bg-purple-600"
+                        : "border border-gray-300 text-gray-700 hover:bg-gray-100"
                     }`}
                 >
                   {category}
@@ -1139,21 +1166,28 @@ export default function HomePage() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: index * 0.1 }}
-                  className={`relative z-10 mb-12 flex items-start flex-col sm:flex-row ${isLeft ? "sm:justify-start sm:pr-12" : "sm:justify-end sm:pl-12"
-                    }`}
+                  className={`relative z-10 mb-12 flex items-start flex-col sm:flex-row ${
+                    isLeft
+                      ? "sm:justify-start sm:pr-12"
+                      : "sm:justify-end sm:pl-12"
+                  }`}
                 >
                   {/* Connector Line and Circle */}
                   <div
                     className={`absolute top-6 w-4 h-4 rounded-full bg-purple-600 z-10 border-4 border-white shadow-md
-                    ${isLeft
+                    ${
+                      isLeft
                         ? "left-1/2 -translate-x-1/2 sm:left-1/2 sm:-translate-x-1/2"
                         : "left-1/2 -translate-x-1/2 sm:left-1/2 sm:-translate-x-1/2"
-                      }`}
+                    }`}
                   ></div>
 
                   <div
-                    className={`w-full sm:w-1/2 ${isLeft ? "sm:text-left text-center" : "sm:text-right text-center"
-                      } mt-8 sm:mt-0`}
+                    className={`w-full sm:w-1/2 ${
+                      isLeft
+                        ? "sm:text-left text-center"
+                        : "sm:text-right text-center"
+                    } mt-8 sm:mt-0`}
                   >
                     <motion.div
                       whileHover={{ scale: 1.03 }}
@@ -1165,7 +1199,9 @@ export default function HomePage() {
                       <h3 className="text-xl font-semibold text-gray-900 mb-2 pt-6 sm:pt-0">
                         {item.title}
                       </h3>
-                      <p className="text-sm text-gray-600">{item.description}</p>
+                      <p className="text-sm text-gray-600">
+                        {item.description}
+                      </p>
                     </motion.div>
                   </div>
                 </motion.div>
@@ -1212,7 +1248,9 @@ export default function HomePage() {
             </div>
           ) : trustedClients.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-gray-500">No client logos available at the moment.</p>
+              <p className="text-gray-500">
+                No client logos available at the moment.
+              </p>
             </div>
           ) : (
             <motion.div
@@ -1241,7 +1279,11 @@ export default function HomePage() {
                     alt={`${client.name} logo`}
                     width={150}
                     height={150}
-                    style={{ objectFit: "contain", width: "100%", height: "100%" }}
+                    style={{
+                      objectFit: "contain",
+                      width: "100%",
+                      height: "100%",
+                    }}
                     className="p-2"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
@@ -1255,7 +1297,10 @@ export default function HomePage() {
         </div>
       </section>
       {/* Modals */}
-      <ContactModal isOpen={showContact} onClose={() => setShowContact(false)} />
+      <ContactModal
+        isOpen={showContact}
+        onClose={() => setShowContact(false)}
+      />
       {/* Footer */}
       <Footer />
     </div>

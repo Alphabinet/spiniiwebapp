@@ -221,7 +221,7 @@ export default function CampaignPage() {
                         subscriptionStatus: data.subscriptionStatus || 'inactive'
                     });
                 } else {
-                    setUserProfile({ name: "User", email: user.email || "N/A", profileImage: null, accountType: 'user', subscriptionStatus: 'inactive' });
+                    setUserProfile({ name: "User", email: user.email || "N/A", profileImage: "", accountType: 'user', subscriptionStatus: 'inactive' });
                 }
 
                 const appliedQ = query(collection(db, `users/${user.uid}/appliedCampaigns`));
