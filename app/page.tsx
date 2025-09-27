@@ -250,7 +250,7 @@ export default function HomePage() {
         // MODIFIED: Query for creators with an 'active' subscription status
         const q = query(
           creatorsCollectionRef,
-          where("subscriptionStatus", "==", "active")
+          where("status", "==", "approved")
         );
         const querySnapshot = await getDocs(q);
 

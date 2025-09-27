@@ -74,13 +74,13 @@ interface Creator {
 interface BookingData {
   step: number;
   services: { reels: number; story: number; reelsStory: number };
-  campaign: {
-    name: string;
-    description: string;
-    deadline: Date | null;
-    demoVideo: File | null;
-    demoVideoUrl?: string;
-  };
+  // campaign: {
+  //   name: string;
+  //   description: string;
+  //   deadline: Date | null;
+  //   demoVideo: File | null;
+  //   demoVideoUrl?: string;
+  // };
   bookerDetails: {
     fullName: string;
     email: string;
@@ -99,7 +99,7 @@ const BookingPage: React.FC = () => {
   const router = useRouter();
   const { toast } = useToast();
 
-  const SERVICE_CHARGE = 99;
+  const SERVICE_CHARGE = 0;
 
   const [creator, setCreator] = useState<Creator | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,21 +109,20 @@ const BookingPage: React.FC = () => {
   const [bookingData, setBookingData] = useState<BookingData>({
     step: 1,
     services: { reels: 0, story: 0, reelsStory: 0 },
-    campaign: { name: "", description: "", deadline: null, demoVideo: null },
+    // campaign: { name: "", description: "", deadline: null, demoVideo: null },
     bookerDetails: { fullName: "", email: "", phoneNumber: "" },
     payment: { status: "idle" },
   });
 
-  const { step, services, campaign, bookerDetails, payment } = bookingData;
+  const { step, services, bookerDetails, payment } = bookingData;
   const [showCalendar, setShowCalendar] = useState(false);
 
   const steps = useMemo(
     () => [
       { number: 1, label: "Services" },
-      { number: 2, label: "Campaign" },
-      { number: 3, label: "Your Details" },
-      { number: 4, label: "Confirm" },
-      { number: 5, label: "Confirmation" },
+      { number: 2, label: "Your Details" }, // Previously step 3
+      { number: 3, label: "Confirm" }, // Previously step 4
+      { number: 4, label: "Confirmation" }, // Previously step 5
     ],
     []
   );
@@ -196,7 +195,7 @@ const BookingPage: React.FC = () => {
     const { name, value } = e.target;
     setBookingData((prev) => ({
       ...prev,
-      campaign: { ...prev.campaign, [name]: value },
+      // campaign: { ...prev.campaign, [name]: value },
     }));
   };
 
@@ -214,7 +213,7 @@ const BookingPage: React.FC = () => {
     setBookingData((prev) => ({
       ...prev,
       campaign: {
-        ...prev.campaign,
+        // ...prev.campaign,
         deadline: date || null,
       },
     }));
@@ -225,7 +224,7 @@ const BookingPage: React.FC = () => {
     const file = e.target.files ? e.target.files[0] : null;
     setBookingData((prev) => ({
       ...prev,
-      campaign: { ...prev.campaign, demoVideo: file },
+      // campaign: { ...prev.campaign, demoVideo: file },
     }));
   };
 
@@ -244,21 +243,21 @@ const BookingPage: React.FC = () => {
           errorMessage = "Please select at least one service to proceed.";
         }
         break;
+      // case 2:
+      //   if (
+      //     !campaign.name ||
+      //     !campaign.description ||
+      //     campaign.deadline === null
+      //   ) {
+      //     isValid = false;
+      //     errorMessage =
+      //       "Please fill in all campaign details (Name, Description, Deadline).";
+      //   } else if (campaign.deadline && campaign.deadline < new Date()) {
+      //     isValid = false;
+      //     errorMessage = "Deadline must be a future date.";
+      //   }
+      //   break;
       case 2:
-        if (
-          !campaign.name ||
-          !campaign.description ||
-          campaign.deadline === null
-        ) {
-          isValid = false;
-          errorMessage =
-            "Please fill in all campaign details (Name, Description, Deadline).";
-        } else if (campaign.deadline && campaign.deadline < new Date()) {
-          isValid = false;
-          errorMessage = "Deadline must be a future date.";
-        }
-        break;
-      case 3:
         if (
           !bookerDetails.fullName ||
           !bookerDetails.email ||
@@ -276,7 +275,7 @@ const BookingPage: React.FC = () => {
             "Please enter a valid phone number (at least 10 digits).";
         }
         break;
-      case 4:
+      case 3:
         if (payment.status === "processing") {
           isValid = false;
           errorMessage = "Payment is still processing. Please wait.";
@@ -333,26 +332,26 @@ const BookingPage: React.FC = () => {
     }));
 
     let demoVideoUrl = "";
-    if (bookingData.campaign.demoVideo) {
-      try {
-        const storageRef = ref(
-          storage,
-          `bookings/${currentUser.uid}/${Date.now()}_${
-            bookingData.campaign.demoVideo.name
-          }`
-        );
-        await uploadBytes(storageRef, bookingData.campaign.demoVideo);
-        demoVideoUrl = await getDownloadURL(storageRef);
-      } catch (error) {
-        toast({
-          title: "Upload Error",
-          description: "Failed to upload demo video. Please try again.",
-          variant: "destructive",
-        });
-        setBookingData((prev) => ({ ...prev, payment: { status: "idle" } }));
-        return;
-      }
-    }
+    // if (bookingData.campaign.demoVideo) {
+    //   try {
+    //     const storageRef = ref(
+    //       storage,
+    //       `bookings/${currentUser.uid}/${Date.now()}_${
+    //         bookingData.campaign.demoVideo.name
+    //       }`
+    //     );
+    //     await uploadBytes(storageRef, bookingData.campaign.demoVideo);
+    //     demoVideoUrl = await getDownloadURL(storageRef);
+    //   } catch (error) {
+    //     toast({
+    //       title: "Upload Error",
+    //       description: "Failed to upload demo video. Please try again.",
+    //       variant: "destructive",
+    //     });
+    //     setBookingData((prev) => ({ ...prev, payment: { status: "idle" } }));
+    //     return;
+    //   }
+    // }
 
     const bookingPayloadForAPI = {
       creatorId: creator.id,
@@ -375,13 +374,13 @@ const BookingPage: React.FC = () => {
       },
       bookerDetails: bookingData.bookerDetails,
       services: bookingData.services,
-      campaign: {
-        ...bookingData.campaign,
-        demoVideoUrl,
-        deadline: bookingData.campaign.deadline
-          ? bookingData.campaign.deadline.toISOString()
-          : null,
-      },
+      // campaign: {
+      //   ...bookingData.campaign,
+      //   demoVideoUrl,
+      //   deadline: bookingData.campaign.deadline
+      //     ? bookingData.campaign.deadline.toISOString()
+      //     : null,
+      // },
       subTotalPrice,
       serviceCharge: SERVICE_CHARGE,
       grandTotalPrice,
@@ -571,104 +570,104 @@ const BookingPage: React.FC = () => {
             </div>
           </div>
         );
+      // case 2:
+      //   return (
+      //     <div className="space-y-6">
+      //       <h3 className="text-2xl font-bold text-gray-800 text-center">
+      //         Campaign Details
+      //         <span className="block text-sm font-normal text-gray-500 mt-1">
+      //           Tell us about your campaign
+      //         </span>
+      //       </h3>
+      //       <div>
+      //         <Label
+      //           htmlFor="campaignName"
+      //           className="mb-2 block text-gray-700 flex items-center"
+      //         >
+      //           Campaign Name <span className="text-purple-500 ml-1">*</span>
+      //         </Label>
+      //         <Input
+      //           id="campaignName"
+      //           name="name"
+      //           value={campaign.name}
+      //           onChange={handleCampaignChange}
+      //           placeholder="e.g., Summer Collection Launch"
+      //           className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
+      //         />
+      //       </div>
+      //       <div>
+      //         <Label
+      //           htmlFor="campaignDescription"
+      //           className="mb-2 block text-gray-700 flex items-center"
+      //         >
+      //           Campaign Description{" "}
+      //           <span className="text-purple-500 ml-1">*</span>
+      //           <Info className="ml-2 h-4 w-4 text-gray-500" />
+      //         </Label>
+      //         <Textarea
+      //           id="campaignDescription"
+      //           name="description"
+      //           value={campaign.description}
+      //           onChange={handleCampaignChange}
+      //           placeholder="Describe your campaign objectives and requirements..."
+      //           rows={5}
+      //           className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
+      //         />
+      //       </div>
+      //       <div>
+      //         <Label
+      //           htmlFor="campaignDeadline"
+      //           className="mb-2 block text-gray-700 flex items-center"
+      //         >
+      //           Deadline <span className="text-purple-500 ml-1">*</span>
+      //         </Label>
+      //         <Button
+      //           variant="outline"
+      //           onClick={() => setShowCalendar(!showCalendar)}
+      //           className={cn(
+      //             "w-full justify-start text-left font-normal border-gray-300 hover:bg-gray-100",
+      //             !campaign.deadline && "text-gray-400"
+      //           )}
+      //         >
+      //           <CalendarIcon className="mr-2 h-4 w-4 text-gray-600" />
+      //           {campaign.deadline
+      //             ? format(campaign.deadline, "PPP")
+      //             : "Select a date"}
+      //         </Button>
+      //         {showCalendar && (
+      //           <div className="mt-4 flex justify-center">
+      //             <Calendar
+      //               mode="single"
+      //               selected={campaign.deadline || undefined}
+      //               onSelect={handleDeadlineChange}
+      //               initialFocus
+      //               disabled={(date) => date < new Date()}
+      //               className="rounded-md border shadow-md bg-white"
+      //             />
+      //           </div>
+      //         )}
+      //       </div>
+      //       <div>
+      //         <Label htmlFor="demoVideo" className="mb-2 block text-gray-700">
+      //           Upload Demo Video (Optional)
+      //         </Label>
+      //         <Input
+      //           id="demoVideo"
+      //           type="file"
+      //           accept="video/*"
+      //           onChange={handleFileChange}
+      //           className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
+      //         />
+      //         {campaign.demoVideo && (
+      //           <p className="text-sm text-green-600 mt-2 flex items-center">
+      //             <CheckCircle className="h-4 w-4 mr-2" />
+      //             Selected: {campaign.demoVideo.name}
+      //           </p>
+      //         )}
+      //       </div>
+      //     </div>
+      //   );
       case 2:
-        return (
-          <div className="space-y-6">
-            <h3 className="text-2xl font-bold text-gray-800 text-center">
-              Campaign Details
-              <span className="block text-sm font-normal text-gray-500 mt-1">
-                Tell us about your campaign
-              </span>
-            </h3>
-            <div>
-              <Label
-                htmlFor="campaignName"
-                className="mb-2 block text-gray-700 flex items-center"
-              >
-                Campaign Name <span className="text-purple-500 ml-1">*</span>
-              </Label>
-              <Input
-                id="campaignName"
-                name="name"
-                value={campaign.name}
-                onChange={handleCampaignChange}
-                placeholder="e.g., Summer Collection Launch"
-                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
-              />
-            </div>
-            <div>
-              <Label
-                htmlFor="campaignDescription"
-                className="mb-2 block text-gray-700 flex items-center"
-              >
-                Campaign Description{" "}
-                <span className="text-purple-500 ml-1">*</span>
-                <Info className="ml-2 h-4 w-4 text-gray-500" />
-              </Label>
-              <Textarea
-                id="campaignDescription"
-                name="description"
-                value={campaign.description}
-                onChange={handleCampaignChange}
-                placeholder="Describe your campaign objectives and requirements..."
-                rows={5}
-                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
-              />
-            </div>
-            <div>
-              <Label
-                htmlFor="campaignDeadline"
-                className="mb-2 block text-gray-700 flex items-center"
-              >
-                Deadline <span className="text-purple-500 ml-1">*</span>
-              </Label>
-              <Button
-                variant="outline"
-                onClick={() => setShowCalendar(!showCalendar)}
-                className={cn(
-                  "w-full justify-start text-left font-normal border-gray-300 hover:bg-gray-100",
-                  !campaign.deadline && "text-gray-400"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4 text-gray-600" />
-                {campaign.deadline
-                  ? format(campaign.deadline, "PPP")
-                  : "Select a date"}
-              </Button>
-              {showCalendar && (
-                <div className="mt-4 flex justify-center">
-                  <Calendar
-                    mode="single"
-                    selected={campaign.deadline || undefined}
-                    onSelect={handleDeadlineChange}
-                    initialFocus
-                    disabled={(date) => date < new Date()}
-                    className="rounded-md border shadow-md bg-white"
-                  />
-                </div>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="demoVideo" className="mb-2 block text-gray-700">
-                Upload Demo Video (Optional)
-              </Label>
-              <Input
-                id="demoVideo"
-                type="file"
-                accept="video/*"
-                onChange={handleFileChange}
-                className="border-gray-300 focus:border-purple-400 focus:ring-purple-400"
-              />
-              {campaign.demoVideo && (
-                <p className="text-sm text-green-600 mt-2 flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Selected: {campaign.demoVideo.name}
-                </p>
-              )}
-            </div>
-          </div>
-        );
-      case 3:
         return (
           <div className="space-y-6">
             <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -740,7 +739,7 @@ const BookingPage: React.FC = () => {
             </div>
           </div>
         );
-      case 4:
+      case 3:
         return (
           <div className="space-y-8">
             <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -874,39 +873,8 @@ const BookingPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
-                  Campaign Details
-                </h4>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-gray-500">Name</p>
-                    <p className="font-medium">{campaign.name || "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Description</p>
-                    <p className="font-medium line-clamp-2">
-                      {campaign.description || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Deadline</p>
-                    <p className="font-medium">
-                      {campaign.deadline
-                        ? format(campaign.deadline, "PPP")
-                        : "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Reference Video</p>
-                    <p className="font-medium">
-                      {campaign.demoVideo?.name || "None"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                 <h4 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                   Your Details
                 </h4>
@@ -934,7 +902,7 @@ const BookingPage: React.FC = () => {
             </div>
           </div>
         );
-      case 5:
+      case 4:
         return (
           <div className="space-y-8">
             <h3 className="text-2xl font-bold text-gray-800 text-center">
@@ -1161,7 +1129,7 @@ const BookingPage: React.FC = () => {
               Next
             </Button>
           )}
-          {step === 4 && payment.status === "idle" && (
+          {step === 3 && payment.status === "idle" && (
             <Button
               onClick={handleSubmitBooking}
               disabled={!isSDKReady || payment.status === "processing"}
@@ -1179,7 +1147,7 @@ const BookingPage: React.FC = () => {
               )}
             </Button>
           )}
-          {step === 5 && payment.status === "success" && (
+          {step === 4 && payment.status === "success" && (
             <Button
               onClick={() => router.push(`/creator/${creator?.id}`)}
               className="w-full sm:w-auto px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
@@ -1187,13 +1155,13 @@ const BookingPage: React.FC = () => {
               Done
             </Button>
           )}
-          {step === 5 && payment.status === "failed" && (
+          {step === 4 && payment.status === "failed" && (
             <Button
               onClick={() =>
                 setBookingData((prev) => ({
                   ...prev,
                   payment: { status: "idle" },
-                  step: 4,
+                  step: 3,
                 }))
               }
               className="w-full sm:w-auto px-6 py-2 rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors"
@@ -1201,7 +1169,7 @@ const BookingPage: React.FC = () => {
               Try Again
             </Button>
           )}
-          {step === 5 && payment.status === "processing" && (
+          {step === 4 && payment.status === "processing" && (
             <div className="flex items-center justify-center w-full sm:w-auto px-6 py-2 text-gray-700">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Processing Payment...

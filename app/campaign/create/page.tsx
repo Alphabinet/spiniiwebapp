@@ -110,112 +110,23 @@ interface RateCardEntry {
 // --- Data ---
 const INSTAGRAM_RATE_CARD: RateCardEntry[] = [
   { tier: 1000, label: "1K", reelPrice: 500, storyPrice: 300, comboPrice: 700 },
-  {
-    tier: 2000,
-    label: "2K",
-    reelPrice: 800,
-    storyPrice: 500,
-    comboPrice: 1200,
-  },
-  {
-    tier: 5000,
-    label: "5K",
-    reelPrice: 1500,
-    storyPrice: 1000,
-    comboPrice: 2300,
-  },
-  {
-    tier: 10000,
-    label: "10K",
-    reelPrice: 3000,
-    storyPrice: 1500,
-    comboPrice: 4200,
-  },
-  {
-    tier: 20000,
-    label: "20K",
-    reelPrice: 4000,
-    storyPrice: 2500,
-    comboPrice: 6000,
-  },
-  {
-    tier: 30000,
-    label: "30K",
-    reelPrice: 6000,
-    storyPrice: 4000,
-    comboPrice: 9000,
-  },
-  {
-    tier: 50000,
-    label: "50K",
-    reelPrice: 8000,
-    storyPrice: 5000,
-    comboPrice: 12000,
-  },
-  {
-    tier: 70000,
-    label: "70K",
-    reelPrice: 15000,
-    storyPrice: 6000,
-    comboPrice: 19000,
-  },
-  {
-    tier: 100000,
-    label: "100K",
-    reelPrice: 20000,
-    storyPrice: 10000,
-    comboPrice: 28000,
-  },
-  {
-    tier: 200000,
-    label: "200K",
-    reelPrice: 25000,
-    storyPrice: 10000,
-    comboPrice: 33000,
-  },
-  {
-    tier: 300000,
-    label: "300K",
-    reelPrice: 30000,
-    storyPrice: 12000,
-    comboPrice: 40000,
-  },
-  {
-    tier: 400000,
-    label: "400K",
-    reelPrice: 40000,
-    storyPrice: 15000,
-    comboPrice: 52000,
-  },
-  {
-    tier: 500000,
-    label: "500K",
-    reelPrice: 60000,
-    storyPrice: 18000,
-    comboPrice: 75000,
-  },
-  {
-    tier: 750000,
-    label: "750K",
-    reelPrice: 70000,
-    storyPrice: 20000,
-    comboPrice: 85000,
-  },
-  {
-    tier: 1000000,
-    label: "1M",
-    reelPrice: 75000,
-    storyPrice: 25000,
-    comboPrice: 95000,
-  },
-  {
-    tier: 2000000,
-    label: "2M",
-    reelPrice: 80000,
-    storyPrice: 30000,
-    comboPrice: 105000,
-  },
+  { tier: 2000, label: "2K", reelPrice: 800, storyPrice: 500, comboPrice: 1200 },
+  { tier: 5000, label: "5K", reelPrice: 1500, storyPrice: 1000, comboPrice: 2300 },
+  { tier: 10000, label: "10K", reelPrice: 3000, storyPrice: 1500, comboPrice: 4200 },
+  { tier: 20000, label: "20K", reelPrice: 4000, storyPrice: 2500, comboPrice: 6000 },
+  { tier: 30000, label: "30K", reelPrice: 6000, storyPrice: 4000, comboPrice: 9000 },
+  { tier: 50000, label: "50K", reelPrice: 8000, storyPrice: 5000, comboPrice: 12000 },
+  { tier: 70000, label: "70K", reelPrice: 15000, storyPrice: 6000, comboPrice: 19000 },
+  { tier: 100000, label: "100K", reelPrice: 20000, storyPrice: 10000, comboPrice: 28000 },
+  { tier: 200000, label: "200K", reelPrice: 25000, storyPrice: 10000, comboPrice: 33000 },
+  { tier: 300000, label: "300K", reelPrice: 30000, storyPrice: 12000, comboPrice: 40000 },
+  { tier: 400000, label: "400K", reelPrice: 40000, storyPrice: 15000, comboPrice: 52000 },
+  { tier: 500000, label: "500K", reelPrice: 60000, storyPrice: 18000, comboPrice: 75000 },
+  { tier: 750000, label: "750K", reelPrice: 70000, storyPrice: 20000, comboPrice: 85000 },
+  { tier: 1000000, label: "1M", reelPrice: 75000, storyPrice: 25000, comboPrice: 95000 },
+  { tier: 2000000, label: "2M", reelPrice: 80000, storyPrice: 30000, comboPrice: 105000 },
 ];
+
 
 const steps = [
   {
@@ -631,6 +542,18 @@ const CampaignCreationPage = () => {
             "Minimum followers must be at least 1,000.";
           isValid = false;
         }
+        // For the Services & Budget step, ensure totalCreatorBudget is present and >= estimatedMinimumBudget
+        if (
+          formData.totalCreatorBudget === "" ||
+          formData.totalCreatorBudget === null ||
+          isNaN(Number(formData.totalCreatorBudget))
+        ) {
+          newErrors.totalCreatorBudget = "This field is required.";
+          isValid = false;
+        } else if (Number(formData.totalCreatorBudget) < estimatedMinimumBudget) {
+          newErrors.totalCreatorBudget = `Budget must be at least ₹${estimatedMinimumBudget.toLocaleString("en-IN")}.`;
+          isValid = false;
+        }
         break;
       case 2:
         if (Number(formData.minAge) > Number(formData.maxAge)) {
@@ -695,6 +618,7 @@ const CampaignCreationPage = () => {
       "platform",
       "services",
       "minimumFollowers",
+      "totalCreatorBudget",
       "numberOfCreators",
       "minAge",
       "maxAge",
@@ -769,6 +693,18 @@ const CampaignCreationPage = () => {
       Number(formData.minimumFollowers) < 1000
     ) {
       newErrors.minimumFollowers = "Minimum followers must be at least 1,000.";
+      isValidOverall = false;
+    }
+    // Validate totalCreatorBudget globally: required and must meet estimated minimum
+    if (
+      formData.totalCreatorBudget === "" ||
+      formData.totalCreatorBudget === null ||
+      isNaN(Number(formData.totalCreatorBudget))
+    ) {
+      newErrors.totalCreatorBudget = "This field is required.";
+      isValidOverall = false;
+    } else if (Number(formData.totalCreatorBudget) < estimatedMinimumBudget) {
+      newErrors.totalCreatorBudget = `Budget must be at least ₹${estimatedMinimumBudget.toLocaleString("en-IN")}.`;
       isValidOverall = false;
     }
     if (formData.minAge !== "" && Number(formData.minAge) < 13) {
@@ -1125,12 +1061,7 @@ const CampaignCreationPage = () => {
                     Estimated Minimum Budget
                   </p>
                   <p className="text-2xl sm:text-3xl font-extrabold text-purple-900 mt-1">
-                    ₹
-                    {(formData.totalCreatorBudget !== "" &&
-                    !isNaN(Number(formData.totalCreatorBudget))
-                      ? Number(formData.totalCreatorBudget)
-                      : estimatedMinimumBudget
-                    ).toLocaleString("en-IN")}
+                    ₹{estimatedMinimumBudget.toLocaleString("en-IN")}
                   </p>
                 </div>
                 <div>
@@ -1158,8 +1089,16 @@ const CampaignCreationPage = () => {
                       }))
                     }
                     placeholder="Enter your budget"
-                    className="mt-1 text-lg font-bold bg-white"
+                    className={cn(
+                      "mt-1 text-lg font-bold bg-white",
+                      errors.totalCreatorBudget && "border-red-500"
+                    )}
                   />
+                  {errors.totalCreatorBudget && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors.totalCreatorBudget}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {BUDGET_INCREMENTS.map((inc) => (
                       <Button

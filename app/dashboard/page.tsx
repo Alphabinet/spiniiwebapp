@@ -704,12 +704,12 @@ export function ApplicationForm({
     )
       newErrors.instagramProfileLink =
         "Please enter a valid Instagram profile URL.";
-    // if (!formData.totalFollowers.trim())
-    //   newErrors.totalFollowers = "Total Followers count is required.";
+    if (!formData.totalFollowers.trim())
+      newErrors.totalFollowers = "Total Followers count is required.";
     // avgReelViews and storyAverageViews are optional (can be auto-filled via OAuth). Do not block submission if missing.
     // Allow imagePreview (autofilled from Instagram OAuth) as a valid profile picture
-    // if (!image && !imagePreview && !existingApplication?.profilePictureUrl)
-    //   newErrors.profilePicture = "Profile Picture is required.";
+    if (!image && !imagePreview && !existingApplication?.profilePictureUrl)
+      newErrors.profilePicture = "Profile Picture is required.";
     if (!formData.contentCategory)
       newErrors.contentCategory = "Content Category is required.";
     if (!formData.contentLanguages.trim())
@@ -738,24 +738,24 @@ export function ApplicationForm({
     try {
       // Prefer newly uploaded File `image`. If not present, fall back to
       // `imagePreview` (this may contain the Instagram autofill URL).
-      let imageUrl = existingApplication?.profilePictureUrl || "";
+        let imageUrl = existingApplication?.profilePictureUrl || "";
 
-      if (imagePreview) {
-        // Use the third-party platform’s image if available
-        imageUrl = String(imagePreview);
-      }
+        if (imagePreview) {
+          // Use the third-party platform’s image if available
+          imageUrl = String(imagePreview);
+        }
 
       // Send formData (which now includes IG metrics) to Firestore
       const dataToSend = {
         ...formData,
         profilePictureUrl: imageUrl,
         userId: user.uid,
-        status:
-          existingApplication?.status === "rejected"
-            ? "pending"
-            : existingApplication?.status || "pending",
+        status: "approved",
         updatedAt: serverTimestamp(),
       } as any;
+
+      console.log(dataToSend);
+      
 
       if (existingApplication) {
         await updateDoc(
@@ -849,14 +849,14 @@ export function ApplicationForm({
       </div>
 
       <div className="p-4 sm:p-6 md:p-8">
-        {isSubscribed && (
+        {/* {isSubscribed && (
           <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-300 shadow-sm flex items-center">
             <span className="text-purple-900 font-medium text-xs sm:text-sm">
               <span className="block sm:inline">👑 Creator Pro:</span> You have
               an active subscription. Enjoy all premium features freely.
             </span>
           </div>
-        )}
+        )} */}
 
         <form onSubmit={onFormSubmit} className="space-y-6 sm:space-y-8">
           {/* Instagram Connect Modal */}
@@ -2199,9 +2199,9 @@ function CreatorDashboard() {
                         >
                           @{creatorData.instagramUsername}
                         </a>
-                        <div className="text-xs text-gray-500">
+                        {/* <div className="text-xs text-gray-500">
                           State: {(creatorData as any).instagramState ?? "-"}
-                        </div>
+                        </div> */}
                       </div>
                       <div>
                         {creatorData.profilePictureUrl ? (
@@ -2220,10 +2220,10 @@ function CreatorDashboard() {
               </div>
 
               {/* Application Status */}
-              <ApplicationStatus application={creatorData} />
+              {/* <ApplicationStatus application={creatorData} /> */}
 
               {/* Recent Activity */}
-              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
+              {/* <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">
                   Recent Activity
                 </h3>
@@ -2246,7 +2246,7 @@ function CreatorDashboard() {
                     <p className="text-sm text-gray-500">No recent activity.</p>
                   )}
                 </ul>
-              </div>
+              </div> */}
             </>
           );
         } else if (
@@ -2258,10 +2258,10 @@ function CreatorDashboard() {
           return (
             <>
               {/* Application Status */}
-              <ApplicationStatus application={creatorData} />
+              {/* <ApplicationStatus application={creatorData} /> */}
 
               {/* Prompt to manage application */}
-              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
+              {/* <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-100 text-center">
                 <DocumentTextIcon className="w-16 h-16 mx-auto text-purple-500 mb-4" />
                 <h2 className="text-2xl font-bold text-gray-900">
                   Your Application Status
@@ -2277,7 +2277,7 @@ function CreatorDashboard() {
                 >
                   <PencilSquareIcon className="w-5 h-5" /> Manage Application
                 </button>
-              </div>
+              </div> */}
             </>
           );
         } else {

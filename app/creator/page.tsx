@@ -150,7 +150,7 @@ function CreatorListPage() {
         // Query now only filters for creators with an 'active' subscription.
         const q = query(
           creatorsCollectionRef,
-          where("subscriptionStatus", "==", "active")
+          where("status", "==", "approved")
         );
 
         const querySnapshot = await getDocs(q);
