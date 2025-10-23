@@ -306,158 +306,271 @@ const BookingPage: React.FC = () => {
     setBookingData((prev) => ({ ...prev, step: prev.step - 1 }));
   };
 
-  const handleSubmitBooking = async () => {
-    if (!currentUser) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to complete your booking",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!isSDKReady) {
-      toast({
-        title: "Payment Gateway Loading",
-        description:
-          "Please wait a moment for the payment gateway to be ready.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!creator) return;
+  // const handleSubmitBooking = async () => {
+  //   if (!currentUser) {
+  //     toast({
+  //       title: "Authentication Required",
+  //       description: "Please sign in to complete your booking",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+  //   if (!isSDKReady) {
+  //     toast({
+  //       title: "Payment Gateway Loading",
+  //       description:
+  //         "Please wait a moment for the payment gateway to be ready.",
+  //       variant: "destructive",
+  //     });
+  //     return;
+  //   }
+  //   if (!creator) return;
 
-    setBookingData((prev) => ({
-      ...prev,
-      payment: { status: "processing", message: "Initiating payment..." },
-    }));
+  //   setBookingData((prev) => ({
+  //     ...prev,
+  //     payment: { status: "processing", message: "Initiating payment..." },
+  //   }));
 
-    let demoVideoUrl = "";
-    // if (bookingData.campaign.demoVideo) {
-    //   try {
-    //     const storageRef = ref(
-    //       storage,
-    //       `bookings/${currentUser.uid}/${Date.now()}_${
-    //         bookingData.campaign.demoVideo.name
-    //       }`
-    //     );
-    //     await uploadBytes(storageRef, bookingData.campaign.demoVideo);
-    //     demoVideoUrl = await getDownloadURL(storageRef);
-    //   } catch (error) {
-    //     toast({
-    //       title: "Upload Error",
-    //       description: "Failed to upload demo video. Please try again.",
-    //       variant: "destructive",
-    //     });
-    //     setBookingData((prev) => ({ ...prev, payment: { status: "idle" } }));
-    //     return;
-    //   }
-    // }
+  //   let demoVideoUrl = "";
+  //   // if (bookingData.campaign.demoVideo) {
+  //   //   try {
+  //   //     const storageRef = ref(
+  //   //       storage,
+  //   //       `bookings/${currentUser.uid}/${Date.now()}_${
+  //   //         bookingData.campaign.demoVideo.name
+  //   //       }`
+  //   //     );
+  //   //     await uploadBytes(storageRef, bookingData.campaign.demoVideo);
+  //   //     demoVideoUrl = await getDownloadURL(storageRef);
+  //   //   } catch (error) {
+  //   //     toast({
+  //   //       title: "Upload Error",
+  //   //       description: "Failed to upload demo video. Please try again.",
+  //   //       variant: "destructive",
+  //   //     });
+  //   //     setBookingData((prev) => ({ ...prev, payment: { status: "idle" } }));
+  //   //     return;
+  //   //   }
+  //   // }
 
-    const bookingPayloadForAPI = {
-      creatorId: creator.id,
-      creatorName: creator.fullName,
-      creatorDetails: {
-        fullName: creator.fullName,
-        profilePictureUrl: creator.profilePictureUrl,
-        instagramUsername: creator.instagramUsername,
-        instagramProfileLink: creator.instagramProfileLink,
-        totalFollowers: creator.totalFollowers,
-        avgReelViews: creator.avgReelViews,
-        storyAverageViews: creator.storyAverageViews,
-        cityState: creator.cityState,
-        gender: creator.gender,
-        contentCategory: creator.contentCategory,
-        contentLanguages: creator.contentLanguages,
-        deliveryDuration: creator.deliveryDuration,
-        emailAddress: creator.emailAddress,
-        mobileNumber: creator.mobileNumber,
-      },
-      bookerDetails: bookingData.bookerDetails,
-      services: bookingData.services,
-      // campaign: {
-      //   ...bookingData.campaign,
-      //   demoVideoUrl,
-      //   deadline: bookingData.campaign.deadline
-      //     ? bookingData.campaign.deadline.toISOString()
-      //     : null,
-      // },
-      subTotalPrice,
-      serviceCharge: SERVICE_CHARGE,
-      grandTotalPrice,
-    };
+  //   const bookingPayloadForAPI = {
+  //     creatorId: creator.id,
+  //     creatorName: creator.fullName,
+  //     creatorDetails: {
+  //       fullName: creator.fullName,
+  //       profilePictureUrl: creator.profilePictureUrl,
+  //       instagramUsername: creator.instagramUsername,
+  //       instagramProfileLink: creator.instagramProfileLink,
+  //       totalFollowers: creator.totalFollowers,
+  //       avgReelViews: creator.avgReelViews,
+  //       storyAverageViews: creator.storyAverageViews,
+  //       cityState: creator.cityState,
+  //       gender: creator.gender,
+  //       contentCategory: creator.contentCategory,
+  //       contentLanguages: creator.contentLanguages,
+  //       deliveryDuration: creator.deliveryDuration,
+  //       emailAddress: creator.emailAddress,
+  //       mobileNumber: creator.mobileNumber,
+  //     },
+  //     bookerDetails: bookingData.bookerDetails,
+  //     services: bookingData.services,
+  //     // campaign: {
+  //     //   ...bookingData.campaign,
+  //     //   demoVideoUrl,
+  //     //   deadline: bookingData.campaign.deadline
+  //     //     ? bookingData.campaign.deadline.toISOString()
+  //     //     : null,
+  //     // },
+  //     subTotalPrice,
+  //     serviceCharge: SERVICE_CHARGE,
+  //     grandTotalPrice,
+  //   };
 
-    try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/cashfree/create-booking-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ bookingPayload: bookingPayloadForAPI }),
-      });
+  //   try {
+  //     const token = await currentUser.getIdToken();
+  //     const response = await fetch("/api/cashfree/create-booking-order", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //       body: JSON.stringify({ bookingPayload: bookingPayloadForAPI }),
+  //     });
 
-      const data = await response.json();
+  //     const data = await response.json();
 
-      if (data.success && data.payment_session_id) {
-        const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE as
-          | "sandbox"
-          | "production";
+  //     if (data.success && data.payment_session_id) {
+  //       const cashfreeMode = process.env.NEXT_PUBLIC_CASHFREE_MODE as
+  //         | "sandbox"
+  //         | "production";
 
-        if (!cashfreeMode) {
-          toast({
-            title: "Configuration Error",
-            description: "Payment gateway mode is not configured.",
-            variant: "destructive",
-          });
-          setBookingData((prev) => ({
-            ...prev,
-            payment: {
-              status: "failed",
-              message: "Client configuration error.",
-            },
-          }));
-          return;
-        }
+  //       if (!cashfreeMode) {
+  //         toast({
+  //           title: "Configuration Error",
+  //           description: "Payment gateway mode is not configured.",
+  //           variant: "destructive",
+  //         });
+  //         setBookingData((prev) => ({
+  //           ...prev,
+  //           payment: {
+  //             status: "failed",
+  //             message: "Client configuration error.",
+  //           },
+  //         }));
+  //         return;
+  //       }
 
-        const cashfree = (window as any).Cashfree({ mode: cashfreeMode });
-        cashfree.checkout({
-          paymentSessionId: data.payment_session_id,
-          redirectTarget: "_self",
-        });
+  //       const cashfree = (window as any).Cashfree({ mode: cashfreeMode });
+  //       cashfree.checkout({
+  //         paymentSessionId: data.payment_session_id,
+  //         redirectTarget: "_self",
+  //       });
 
-        setBookingData((prev) => ({
-          ...prev,
-          payment: {
-            status: "processing",
-            message: "Redirecting to payment gateway...",
-          },
-        }));
-      } else {
-        toast({
-          title: "Payment Error",
-          description: data.message || "Could not initiate payment.",
-          variant: "destructive",
-        });
-        setBookingData((prev) => ({
-          ...prev,
-          payment: { status: "failed", message: data.message },
-        }));
-      }
-    } catch (error) {
-      console.error("Booking processing error:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred.",
-        variant: "destructive",
-      });
-      setBookingData((prev) => ({
-        ...prev,
-        payment: { status: "failed", message: "An unexpected error occurred." },
-      }));
-      setBookingData((prev) => ({ ...prev, step: 5 }));
-    }
-  };
+  //       setBookingData((prev) => ({
+  //         ...prev,
+  //         payment: {
+  //           status: "processing",
+  //           message: "Redirecting to payment gateway...",
+  //         },
+  //       }));
+  //     } else {
+  //       toast({
+  //         title: "Payment Error",
+  //         description: data.message || "Could not initiate payment.",
+  //         variant: "destructive",
+  //       });
+  //       setBookingData((prev) => ({
+  //         ...prev,
+  //         payment: { status: "failed", message: data.message },
+  //       }));
+  //     }
+  //   } catch (error) {
+  //     console.error("Booking processing error:", error);
+  //     toast({
+  //       title: "Error",
+  //       description: "An unexpected error occurred.",
+  //       variant: "destructive",
+  //     });
+  //     setBookingData((prev) => ({
+  //       ...prev,
+  //       payment: { status: "failed", message: "An unexpected error occurred." },
+  //     }));
+  //     setBookingData((prev) => ({ ...prev, step: 5 }));
+  //   }
+  // };
+
+ const handleSubmitBooking = async () => {  
+  if (!currentUser) {  
+    toast({  
+      title: "Authentication Required",  
+      description: "Please sign in to complete your booking",  
+      variant: "destructive",  
+    });  
+    return;  
+  }  
+  if (!creator) return;  
+  
+  setBookingData((prev) => ({  
+    ...prev,  
+    payment: { status: "processing", message: "Creating booking..." },  
+  }));  
+  
+  try {  
+    // Generate order ID matching backend format  
+    const orderId = `BOOK_${Date.now()}_${currentUser.uid.substring(0, 8)}`;  
+    const bookingRef = doc(db, "bookings", orderId);  
+      
+    // Create booking document matching backend structure exactly  
+    await setDoc(bookingRef, {  
+      // Creator information  
+      creatorId: creator.id,  
+      creatorName: creator.fullName,  
+      creatorDetails: {  
+        fullName: creator.fullName,  
+        profilePictureUrl: creator.profilePictureUrl,  
+        instagramUsername: creator.instagramUsername,  
+        instagramProfileLink: creator.instagramProfileLink,  
+        totalFollowers: creator.totalFollowers,  
+        avgReelViews: creator.avgReelViews,  
+        storyAverageViews: creator.storyAverageViews,  
+        cityState: creator.cityState,  
+        gender: creator.gender,  
+        contentCategory: creator.contentCategory,  
+        contentLanguages: creator.contentLanguages,  
+        deliveryDuration: creator.deliveryDuration,  
+        emailAddress: creator.emailAddress,  
+        mobileNumber: creator.mobileNumber,  
+      },  
+        
+      // Booker information  
+      bookerDetails: bookingData.bookerDetails,  
+        
+      // Services  
+      services: bookingData.services,  
+        
+      // Campaign - empty object since you removed campaign functionality  
+      campaign: {  
+        name: "",  
+        description: "",  
+        deadline: null,  
+        demoVideoUrl: ""  
+      },  
+        
+      // Order and user IDs  
+      orderId: orderId,  
+      userId: currentUser.uid,  
+        
+      // Payment object matching backend structure  
+      payment: {  
+        status: 'PAID', // Set to PAID since we're skipping payment  
+        amount: grandTotalPrice,  
+        currency: 'INR',  
+        paidAt: Timestamp.now() // Add timestamp for when "payment" was completed  
+      },  
+        
+      // Pricing details at top level (backend explicitly saves these)  
+      subTotalPrice: subTotalPrice,  
+      serviceCharge: SERVICE_CHARGE,  
+      grandTotalPrice: grandTotalPrice,  
+        
+      // Status - use 'confirmed' or 'pending_approval' based on your workflow  
+      status: 'confirmed', // Changed from 'pending_payment' since no payment needed  
+        
+      // Timestamp  
+      createdAt: Timestamp.now(),  
+    });  
+  
+    // Set success state  
+    setBookingData((prev) => ({  
+      ...prev,  
+      payment: {  
+        status: "success",  
+        message: "Booking confirmed!",  
+        transactionId: orderId,  
+      },  
+      step: 4,  
+    }));  
+  
+    toast({  
+      title: "Success",  
+      description: "Your booking has been confirmed!",  
+    });  
+  } catch (error) {  
+    console.error("Booking creation error:", error);  
+    toast({  
+      title: "Error",  
+      description: "Failed to create booking. Please try again.",  
+      variant: "destructive",  
+    });  
+    setBookingData((prev) => ({  
+      ...prev,  
+      payment: {  
+        status: "failed",  
+        message: "Failed to create booking.",  
+      },  
+    }));  
+  }  
+};
 
   const ServiceCard = ({
     type,
@@ -532,13 +645,13 @@ const BookingPage: React.FC = () => {
             <div className="space-y-4">
               <ServiceCard
                 type="reels"
-                label="Reels Post"
+                label="Reels"
                 description="Short-form video content for engaging your audience"
                 price={creator.reelPrice}
               />
               <ServiceCard
                 type="story"
-                label="Story Post"
+                label="Story"
                 description="24-hour disappearing content for quick updates"
                 price={creator.storyPrice}
               />
@@ -1070,14 +1183,14 @@ const BookingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-800 p-6 flex items-center justify-center">
       {/* --- FIX: Changed script loading strategy to 'beforeInteractive' for faster loading --- */}
-      <Script
+      {/* <Script
         src="https://sdk.cashfree.com/js/v3/cashfree.js"
         onLoad={() => {
           console.log("Cashfree SDK Loaded!");
           setIsSDKReady(true);
         }}
         strategy="afterInteractive"
-      />
+      /> */}
 
       <div className="w-full sm:max-w-2xl bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-200">
         <div className="flex justify-between items-center mb-6">
@@ -1132,7 +1245,7 @@ const BookingPage: React.FC = () => {
           {step === 3 && payment.status === "idle" && (
             <Button
               onClick={handleSubmitBooking}
-              disabled={!isSDKReady || payment.status === "processing"}
+              disabled={payment.status === "processing"}
               className="w-full sm:w-auto px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
             >
               {payment.status === "processing" ? (
@@ -1142,7 +1255,7 @@ const BookingPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <ShoppingCart className="mr-2 h-5 w-5" /> Confirm & Pay
+                  <CheckCircle className="mr-2 h-5 w-5" /> Confirm Booking
                 </>
               )}
             </Button>
